@@ -1,192 +1,187 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, Sparkles, AlertCircle, Loader2,
+  TrendingUp, TrendingDown, Sparkles, AlertCircle, Loader2, ChevronDown,
 } from "lucide-react";
 
-// ── Mock data ──────────────────────────────────────────────────────────────
-// Shape assumption (flagged per the brief): `markets` is extended with
-// plannedConversions/actualConversions so the breakdown table has real
-// numbers to show — the brief's sample only had `budget` on the planned
-// side. Swap this for whatever the actual Media Plan Builder export /
-// MCP pull produces; the component only reads the fields below.
+// ── Client configs ───────────────────────────────────────────────────────────
+// Each client defines: which funnel phases exist, which KPI fields render
+// under each phase, and what dimension the breakdown table groups by.
+// Shimano's mirrors the real dashboard's structure (Awareness/Consideration/
+// Purchase phases, Category breakdown matching its Product Mapping logic) —
+// but none of that dashboard's actual data-wrangling (VLOOKUP fallbacks,
+// Funnel.io "Product Not Found" handling, video-name matching) lives here.
+// This artifact only renders whatever standardized snapshot the existing
+// Python pipeline (or any client's equivalent) hands it.
 
-const MOCK_PLANNED = {
-  scenarios: [{
-    name: "Q3 EU Lead Gen",
-    markets: [
-      { market: "DE", channel: "YouTube", goal: "Conversion", budget: 8000, plannedConversions: 64 },
-      { market: "FR", channel: "Search", goal: "Conversion", budget: 6000, plannedConversions: 90 },
-      { market: "NL", channel: "LinkedIn", goal: "Conversion", budget: 4000, plannedConversions: 28 },
-    ],
-    periods: [
-      { label: "Week 1", impressions: 480000, clicks: 4200, sessions: 3400, conversions: 42 },
-      { label: "Week 2", impressions: 510000, clicks: 4500, sessions: 3650, conversions: 46 },
-      { label: "Week 3", impressions: 495000, clicks: 4350, sessions: 3520, conversions: 44 },
-      { label: "Week 4", impressions: 520000, clicks: 4600, sessions: 3720, conversions: 48 },
-      { label: "Week 5", impressions: 505000, clicks: 4450, sessions: 3600, conversions: 45 },
-      { label: "Week 6", impressions: 530000, clicks: 4700, sessions: 3800, conversions: 49 },
-    ],
-  }],
+const CLIENT_CONFIGS = {
+  shimano: {
+    name: "Shimano Fishing",
+    industry: "Outdoor / Sporting Goods",
+    accent: "#1D9E75",
+    phases: {
+      Awareness: { color: "#7F77DD", kpis: ["impressions", "reach", "frequency", "cpm", "videoViews", "vtr"] },
+      Consideration: { color: "#1D9E75", kpis: ["clicks", "ctr", "cpc", "engagementRate", "sessions", "bounceRate"] },
+      Purchase: { color: "#D85A30", kpis: ["conversions", "leads", "revenue", "roas", "cpa", "cvr"] },
+    },
+    breakdownDimLabel: "Category",
+  },
+  acme: {
+    name: "Acme Corp",
+    industry: "B2B SaaS",
+    accent: "#2563eb",
+    phases: {
+      Awareness: { color: "#7F77DD", kpis: ["impressions", "reach", "cpm"] },
+      Consideration: { color: "#2563eb", kpis: ["clicks", "ctr", "cpc", "sessions"] },
+      Purchase: { color: "#D85A30", kpis: ["conversions", "leads", "cpa", "cvr"] },
+    },
+    breakdownDimLabel: "Channel",
+  },
 };
 
-const MOCK_ACTUAL = {
-  scenarios: [{
-    name: "Q3 EU Lead Gen",
-    markets: [
-      { market: "DE", channel: "YouTube", goal: "Conversion", spend: 7600, actualConversions: 58 },
-      { market: "FR", channel: "Search", goal: "Conversion", spend: 6400, actualConversions: 102 },
-      { market: "NL", channel: "LinkedIn", goal: "Conversion", spend: 3500, actualConversions: 19 },
-    ],
-    periods: [
-      { label: "Week 1", impressions: 440000, clicks: 3900, sessions: 3100, conversions: 38 },
-      { label: "Week 2", impressions: 525000, clicks: 4800, sessions: 3900, conversions: 51 },
-      { label: "Week 3", impressions: 470000, clicks: 4000, sessions: 3200, conversions: 40 },
-      { label: "Week 4", impressions: 560000, clicks: 5100, sessions: 4150, conversions: 56 },
-      { label: "Week 5", impressions: 480000, clicks: 4100, sessions: 3300, conversions: 41 },
-      { label: "Week 6", impressions: 545000, clicks: 4900, sessions: 3950, conversions: 53 },
-    ],
-  }],
+const KPI_LABELS = {
+  impressions: "Impressions", reach: "Reach", frequency: "Frequency", cpm: "CPM (€)",
+  videoViews: "Video Views", vtr: "VTR", clicks: "Clicks", ctr: "CTR", cpc: "CPC (€)",
+  engagementRate: "Engagement Rate", sessions: "Sessions", bounceRate: "Bounce Rate",
+  conversions: "Conversions", leads: "Leads", revenue: "Revenue (€)", roas: "ROAS",
+  cpa: "CPA (€)", cvr: "CVR",
 };
 
-const METRICS = [
-  { key: "impressions", label: "Impressions" },
-  { key: "clicks", label: "Clicks" },
-  { key: "sessions", label: "Sessions" },
-  { key: "conversions", label: "Conversions" },
-];
+const PCT_KPIS = new Set(["frequency", "vtr", "ctr", "engagementRate", "bounceRate", "cvr", "roas"]);
+const EUR_KPIS = new Set(["cpm", "cpc", "revenue", "cpa"]);
+
+function fmtKpi(key, v) {
+  if (v == null) return "–";
+  if (EUR_KPIS.has(key)) return `€${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  if (key === "roas") return `${Number(v).toFixed(2)}x`;
+  if (PCT_KPIS.has(key)) return `${Number(v).toFixed(2)}%`;
+  return Math.round(v).toLocaleString();
+}
+
+// ── Mock data per client ──────────────────────────────────────────────────────
+// One snapshot per client: a time series + a breakdown table. Real data
+// would arrive in this same shape from the standardization pipeline.
+
+const MOCK_DATA = {
+  shimano: {
+    periods: [
+      { label: "Week 1", impressions: 480000, reach: 210000, frequency: 2.3, cpm: 9.2, videoViews: 140000, vtr: 29.1, clicks: 4200, ctr: 0.88, cpc: 1.05, engagementRate: 3.1, sessions: 3400, bounceRate: 41, conversions: 42, leads: 38, revenue: 18900, roas: 2.1, cpa: 104.5, cvr: 1.2 },
+      { label: "Week 2", impressions: 510000, reach: 225000, frequency: 2.4, cpm: 9.0, videoViews: 152000, vtr: 29.8, clicks: 4500, ctr: 0.88, cpc: 1.0, engagementRate: 3.3, sessions: 3650, bounceRate: 40, conversions: 46, leads: 41, revenue: 20700, roas: 2.3, cpa: 99.1, cvr: 1.3 },
+      { label: "Week 3", impressions: 495000, reach: 218000, frequency: 2.3, cpm: 9.4, videoViews: 144000, vtr: 29.0, clicks: 4350, ctr: 0.88, cpc: 1.08, engagementRate: 3.0, sessions: 3520, bounceRate: 42, conversions: 44, leads: 39, revenue: 19500, roas: 2.0, cpa: 106.8, cvr: 1.2 },
+      { label: "Week 4", impressions: 520000, reach: 232000, frequency: 2.4, cpm: 8.8, videoViews: 158000, vtr: 30.4, clicks: 4600, ctr: 0.88, cpc: 0.97, engagementRate: 3.4, sessions: 3720, bounceRate: 39, conversions: 48, leads: 43, revenue: 21800, roas: 2.4, cpa: 93.0, cvr: 1.3 },
+    ],
+    breakdown: [
+      { dim: "Predator", impressions: 380000, clicks: 3200, conversions: 32, revenue: 14200 },
+      { dim: "Saltwater", impressions: 290000, clicks: 2400, conversions: 21, revenue: 9800 },
+      { dim: "Aero", impressions: 210000, clicks: 1900, conversions: 18, revenue: 7600 },
+      { dim: "Tribal", impressions: 125000, clicks: 980, conversions: 9, revenue: 4100 },
+    ],
+  },
+  acme: {
+    periods: [
+      { label: "Week 1", impressions: 220000, reach: 95000, cpm: 14.2, clicks: 2100, ctr: 0.95, cpc: 1.9, sessions: 1700, conversions: 28, leads: 28, cpa: 129.0, cvr: 1.6 },
+      { label: "Week 2", impressions: 235000, reach: 99000, cpm: 13.8, clicks: 2250, ctr: 0.96, cpc: 1.85, sessions: 1820, conversions: 31, leads: 31, cpa: 121.4, cvr: 1.7 },
+      { label: "Week 3", impressions: 228000, reach: 97000, cpm: 14.5, clicks: 2180, ctr: 0.96, cpc: 1.92, sessions: 1760, conversions: 29, leads: 29, cpa: 127.3, cvr: 1.6 },
+      { label: "Week 4", impressions: 241000, reach: 102000, cpm: 13.5, clicks: 2310, ctr: 0.96, cpc: 1.8, sessions: 1870, conversions: 33, leads: 33, cpa: 115.9, cvr: 1.8 },
+    ],
+    breakdown: [
+      { dim: "LinkedIn", impressions: 140000, clicks: 1300, conversions: 22, revenue: 0 },
+      { dim: "Search", impressions: 60000, clicks: 780, conversions: 9, revenue: 0 },
+      { dim: "Display", impressions: 35000, clicks: 220, conversions: 2, revenue: 0 },
+    ],
+  },
+};
+
+const PHASE_ALL = "All";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function sumMetric(periods, key) {
-  return periods.reduce((n, p) => n + (Number(p[key]) || 0), 0);
+function avgKpi(periods, key) {
+  const vals = periods.map((p) => p[key]).filter((v) => v != null);
+  if (!vals.length) return null;
+  // Additive metrics get summed, rate/ratio metrics get averaged — a crude
+  // but reasonable split based on the same PCT_KPIS set used for formatting.
+  if (PCT_KPIS.has(key)) return vals.reduce((a, b) => a + b, 0) / vals.length;
+  return vals.reduce((a, b) => a + b, 0);
 }
 
-function pctDelta(actual, planned) {
-  if (!planned) return null;
-  return ((actual - planned) / planned) * 100;
-}
-
-function deltaColor(pct) {
-  if (pct === null) return "text-ink-400";
-  if (pct >= 0) return "text-emerald-600";
-  if (pct >= -20) return "text-amber-600";
-  return "text-red-600";
-}
-
-function deltaBg(pct) {
-  if (pct === null) return "bg-gray-50 border-gray-200";
-  if (pct >= 0) return "bg-emerald-50 border-emerald-200";
-  if (pct >= -20) return "bg-amber-50 border-amber-200";
-  return "bg-red-50 border-red-200";
-}
-
-function fmtNum(n) {
-  return Math.round(n).toLocaleString();
-}
-
-function fmtPct(pct) {
-  if (pct === null) return "–";
-  const sign = pct >= 0 ? "+" : "";
-  return `${sign}${pct.toFixed(1)}%`;
+function trendPct(periods, key) {
+  if (periods.length < 2) return null;
+  const first = periods[0][key];
+  const last = periods[periods.length - 1][key];
+  if (!first) return null;
+  return ((last - first) / first) * 100;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardCreator() {
-  const [planned, setPlanned] = useState(MOCK_PLANNED);
-  const [actual, setActual] = useState(MOCK_ACTUAL);
-  const [plannedText, setPlannedText] = useState("");
-  const [actualText, setActualText] = useState("");
+  const [clientKey, setClientKey] = useState("shimano");
+  const [data, setData] = useState(MOCK_DATA);
+  const [activePhase, setActivePhase] = useState(PHASE_ALL);
+  const [activeMetric, setActiveMetric] = useState(null);
+  const [snapshotText, setSnapshotText] = useState("");
   const [parseError, setParseError] = useState("");
-  const [activeMetric, setActiveMetric] = useState("conversions");
   const [analysis, setAnalysis] = useState("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
 
-  const scenario = planned.scenarios?.[0];
-  const actualScenario = actual.scenarios?.[0];
-  const plannedPeriods = scenario?.periods ?? [];
-  const actualPeriods = actualScenario?.periods ?? [];
-  const markets = scenario?.markets ?? [];
-  const actualMarkets = actualScenario?.markets ?? [];
+  const config = CLIENT_CONFIGS[clientKey];
+  const snapshot = data[clientKey] ?? { periods: [], breakdown: [] };
+  const phaseNames = Object.keys(config.phases);
+  const activePhases = activePhase === PHASE_ALL ? phaseNames : [activePhase];
+  const metric = activeMetric ?? config.phases[activePhases[0]]?.kpis[0];
 
-  function loadPlanned() {
+  function loadSnapshot() {
     try {
-      const parsed = JSON.parse(plannedText);
-      setPlanned(parsed);
+      const parsed = JSON.parse(snapshotText);
+      setData((prev) => ({ ...prev, [clientKey]: parsed }));
       setParseError("");
     } catch (e) {
-      setParseError(`Couldn't parse planned data: ${e.message}`);
+      setParseError(`Couldn't parse snapshot: ${e.message}`);
     }
   }
 
-  function loadActual() {
-    try {
-      const parsed = JSON.parse(actualText);
-      setActual(parsed);
-      setParseError("");
-    } catch (e) {
-      setParseError(`Couldn't parse actual data: ${e.message}`);
-    }
-  }
-
-  // Merge market rows by (market, channel) so the breakdown table shows
-  // planned + actual side by side even if the two payloads list markets
-  // in a different order.
-  const breakdownRows = markets.map((m) => {
-    const match = actualMarkets.find((a) => a.market === m.market && a.channel === m.channel) ?? {};
-    return {
-      market: m.market,
-      channel: m.channel,
-      plannedBudget: m.budget ?? 0,
-      actualSpend: match.spend ?? 0,
-      plannedConversions: m.plannedConversions ?? 0,
-      actualConversions: match.actualConversions ?? 0,
-    };
-  });
-
-  // One merged series per metric for the chart, keyed by period label.
-  const chartData = plannedPeriods.map((p, i) => ({
-    label: p.label,
-    planned: p[activeMetric] ?? 0,
-    actual: actualPeriods[i]?.[activeMetric] ?? 0,
-  }));
+  const chartData = useMemo(
+    () => snapshot.periods.map((p) => ({ label: p.label, value: p[metric] })),
+    [snapshot, metric],
+  );
 
   async function generateAnalysis() {
     setAnalysisLoading(true);
     setAnalysisError("");
     setAnalysis("");
     try {
-      const totalsSummary = METRICS.map(({ key, label }) => {
-        const p = sumMetric(plannedPeriods, key);
-        const a = sumMetric(actualPeriods, key);
-        return `${label}: planned ${fmtNum(p)}, actual ${fmtNum(a)} (${fmtPct(pctDelta(a, p))})`;
-      }).join("\n");
+      const kpiSummary = activePhases.flatMap((ph) => config.phases[ph].kpis.map((k) => {
+        const avg = avgKpi(snapshot.periods, k);
+        const trend = trendPct(snapshot.periods, k);
+        return `${KPI_LABELS[k] ?? k}: ${fmtKpi(k, avg)} (${trend === null ? "n/a" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}% over the period`})`;
+      })).join("\n");
 
-      const breakdownSummary = breakdownRows.map((r) => (
-        `${r.market} / ${r.channel}: budget planned €${r.plannedBudget} vs spent €${r.actualSpend}, `
-        + `conversions planned ${r.plannedConversions} vs actual ${r.actualConversions} (${fmtPct(pctDelta(r.actualConversions, r.plannedConversions))})`
-      )).join("\n");
+      const breakdownSummary = snapshot.breakdown
+        .map((r) => `${r.dim}: ${r.impressions?.toLocaleString() ?? "–"} impressions, ${r.clicks?.toLocaleString() ?? "–"} clicks, ${r.conversions ?? "–"} conversions`)
+        .join("\n");
 
-      const prompt = `You are a senior paid media strategist reviewing campaign performance for "${scenario?.name ?? "this plan"}" against its original media plan.
+      const prompt = `You are a senior paid media strategist reviewing performance for ${config.name} (${config.industry}).
 
-Overall KPIs (planned vs actual):
-${totalsSummary}
+Phase(s) in scope: ${activePhases.join(", ")}
 
-Breakdown by market/channel:
+KPI summary:
+${kpiSummary}
+
+${config.breakdownDimLabel} breakdown:
 ${breakdownSummary}
 
-Identify the top 3 performance gaps (where actual diverges most meaningfully from planned, in either direction) and give one specific, actionable recommendation per gap. Be direct and reference the actual numbers. No generic advice — ground everything in the data above. Keep it under 200 words.`;
+Write a concise analysis (120-180 words): what's working, what's not, and one specific recommendation. Be direct, reference the actual numbers, no generic advice.`;
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 1000,
+          max_tokens: 800,
           messages: [{ role: "user", content: prompt }],
         }),
       });
@@ -195,8 +190,8 @@ Identify the top 3 performance gaps (where actual diverges most meaningfully fro
         throw new Error(`API returned ${response.status}. This call only works when this component is opened as a Claude.ai artifact, not run standalone.`);
       }
 
-      const data = await response.json();
-      const text = data.content?.find((b) => b.type === "text")?.text ?? "";
+      const result = await response.json();
+      const text = result.content?.find((b) => b.type === "text")?.text ?? "";
       setAnalysis(text || "No analysis returned.");
     } catch (e) {
       setAnalysisError(e.message || String(e));
@@ -208,159 +203,159 @@ Identify the top 3 performance gaps (where actual diverges most meaningfully fro
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Performance Dashboard</h1>
-          <p className="text-sm text-gray-500">{scenario?.name ?? "Planned vs actual"} — gap analysis</p>
+        {/* Client selector */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Performance Dashboard</h1>
+            <p className="text-sm text-gray-500">{config.industry}</p>
+          </div>
+          <div className="relative">
+            <select
+              value={clientKey}
+              onChange={(e) => { setClientKey(e.target.value); setActivePhase(PHASE_ALL); setActiveMetric(null); setAnalysis(""); }}
+              className="appearance-none rounded-lg border border-gray-200 bg-white px-4 py-2 pr-9 text-sm font-bold text-gray-900"
+              style={{ borderColor: config.accent }}
+            >
+              {Object.entries(CLIENT_CONFIGS).map(([key, c]) => (
+                <option key={key} value={key}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          </div>
         </div>
 
-        {/* 1. Data input panel */}
+        {/* Data input */}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-bold text-gray-700">Load data</h2>
+          <h2 className="mb-2 text-sm font-bold text-gray-700">Load snapshot for {config.name}</h2>
           {parseError && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {parseError}
             </div>
           )}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Media plan JSON (planned)</label>
-              <textarea
-                value={plannedText}
-                onChange={(e) => setPlannedText(e.target.value)}
-                placeholder="Paste the planned media plan JSON here..."
-                className="h-24 w-full rounded-lg border border-gray-200 p-2 text-xs font-mono outline-none focus:border-gray-400"
-              />
-              <button
-                onClick={loadPlanned}
-                disabled={!plannedText.trim()}
-                className="mt-1 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-30"
-              >
-                Load planned
-              </button>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Actual performance JSON</label>
-              <textarea
-                value={actualText}
-                onChange={(e) => setActualText(e.target.value)}
-                placeholder="Paste actual performance data here..."
-                className="h-24 w-full rounded-lg border border-gray-200 p-2 text-xs font-mono outline-none focus:border-gray-400"
-              />
-              <button
-                onClick={loadActual}
-                disabled={!actualText.trim()}
-                className="mt-1 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-30"
-              >
-                Load actual
-              </button>
+          <textarea
+            value={snapshotText}
+            onChange={(e) => setSnapshotText(e.target.value)}
+            placeholder={`Paste a standardized { periods: [...], breakdown: [...] } snapshot for ${config.name}...`}
+            className="h-20 w-full rounded-lg border border-gray-200 p-2 text-xs font-mono outline-none focus:border-gray-400"
+          />
+          <button
+            onClick={loadSnapshot}
+            disabled={!snapshotText.trim()}
+            className="mt-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-30"
+            style={{ backgroundColor: config.accent }}
+          >
+            Load snapshot
+          </button>
+          <p className="mt-1 text-xs text-gray-400">Showing mock data until you load a real one.</p>
+        </div>
+
+        {/* Phase toggle */}
+        <div className="flex flex-wrap gap-1.5">
+          {[PHASE_ALL, ...phaseNames].map((ph) => (
+            <button
+              key={ph}
+              onClick={() => { setActivePhase(ph); setActiveMetric(null); }}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                activePhase === ph ? "text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}
+              style={activePhase === ph ? { backgroundColor: ph === PHASE_ALL ? "#1f2937" : config.phases[ph].color } : {}}
+            >
+              {ph}
+            </button>
+          ))}
+        </div>
+
+        {/* KPI cards, grouped by phase */}
+        {activePhases.map((ph) => (
+          <div key={ph}>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: config.phases[ph].color }}>{ph}</h3>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              {config.phases[ph].kpis.map((key) => {
+                const avg = avgKpi(snapshot.periods, key);
+                const trend = trendPct(snapshot.periods, key);
+                const Icon = trend !== null && trend >= 0 ? TrendingUp : TrendingDown;
+                const isActiveMetric = metric === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setActiveMetric(key)}
+                    className={`rounded-xl border p-3 text-left transition ${isActiveMetric ? "border-gray-900 bg-gray-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{KPI_LABELS[key] ?? key}</p>
+                    <p className="mt-1 text-lg font-bold text-gray-900">{fmtKpi(key, avg)}</p>
+                    {trend !== null && (
+                      <div className={`mt-0.5 flex items-center gap-1 text-[11px] font-bold ${trend >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        <Icon className="h-3 w-3" />
+                        {trend >= 0 ? "+" : ""}{trend.toFixed(1)}%
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <p className="mt-2 text-xs text-gray-400">Showing mock data until you load both. Paste valid JSON matching the agreed shape above.</p>
-        </div>
+        ))}
 
-        {/* 2. KPI summary cards */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {METRICS.map(({ key, label }) => {
-            const p = sumMetric(plannedPeriods, key);
-            const a = sumMetric(actualPeriods, key);
-            const pct = pctDelta(a, p);
-            const Icon = pct !== null && pct >= 0 ? TrendingUp : TrendingDown;
-            return (
-              <div key={key} className={`rounded-xl border p-4 ${deltaBg(pct)}`}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                <p className="mt-1 text-xl font-bold text-gray-900">{fmtNum(a)}</p>
-                <p className="text-xs text-gray-400">planned {fmtNum(p)}</p>
-                <div className={`mt-1 flex items-center gap-1 text-xs font-bold ${deltaColor(pct)}`}>
-                  <Icon className="h-3.5 w-3.5" />
-                  {fmtPct(pct)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* 3. Line chart */}
+        {/* Trend chart for the selected metric */}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-gray-700">Planned vs actual over time</h2>
-            <div className="flex gap-1">
-              {METRICS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveMetric(key)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                    activeMetric === key ? "bg-gray-900 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
+          <h2 className="mb-3 text-sm font-bold text-gray-700">{KPI_LABELS[metric] ?? metric} over time</h2>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <Tooltip formatter={(v) => fmtKpi(metric, v)} />
               <Legend />
-              <Line type="monotone" dataKey="planned" name="Planned" stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="actual" name="Actual" stroke="#0f172a" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="value" name={KPI_LABELS[metric] ?? metric} stroke={config.accent} strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* 4. Breakdown table */}
+        {/* Breakdown table */}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-bold text-gray-700">Breakdown by market / channel</h2>
+          <h2 className="mb-3 text-sm font-bold text-gray-700">Breakdown by {config.breakdownDimLabel}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
-                  <th className="py-2 pr-4">Market</th>
-                  <th className="py-2 pr-4">Channel</th>
-                  <th className="py-2 pr-4">Planned budget</th>
-                  <th className="py-2 pr-4">Actual spend</th>
-                  <th className="py-2 pr-4">Planned conv.</th>
-                  <th className="py-2 pr-4">Actual conv.</th>
-                  <th className="py-2 pr-4">Delta %</th>
+                  <th className="py-2 pr-4">{config.breakdownDimLabel}</th>
+                  <th className="py-2 pr-4">Impressions</th>
+                  <th className="py-2 pr-4">Clicks</th>
+                  <th className="py-2 pr-4">Conversions</th>
+                  <th className="py-2 pr-4">Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {breakdownRows.map((r) => {
-                  const pct = pctDelta(r.actualConversions, r.plannedConversions);
-                  return (
-                    <tr key={`${r.market}-${r.channel}`} className="border-b border-gray-50">
-                      <td className="py-2 pr-4 font-semibold text-gray-900">{r.market}</td>
-                      <td className="py-2 pr-4 text-gray-600">{r.channel}</td>
-                      <td className="py-2 pr-4 text-gray-600">€{fmtNum(r.plannedBudget)}</td>
-                      <td className="py-2 pr-4 text-gray-600">€{fmtNum(r.actualSpend)}</td>
-                      <td className="py-2 pr-4 text-gray-600">{r.plannedConversions}</td>
-                      <td className="py-2 pr-4 text-gray-600">{r.actualConversions}</td>
-                      <td className={`py-2 pr-4 font-bold ${deltaColor(pct)}`}>{fmtPct(pct)}</td>
-                    </tr>
-                  );
-                })}
+                {snapshot.breakdown.map((r) => (
+                  <tr key={r.dim} className="border-b border-gray-50">
+                    <td className="py-2 pr-4 font-semibold text-gray-900">{r.dim}</td>
+                    <td className="py-2 pr-4 text-gray-600">{r.impressions?.toLocaleString() ?? "–"}</td>
+                    <td className="py-2 pr-4 text-gray-600">{r.clicks?.toLocaleString() ?? "–"}</td>
+                    <td className="py-2 pr-4 text-gray-600">{r.conversions ?? "–"}</td>
+                    <td className="py-2 pr-4 text-gray-600">{r.revenue ? `€${r.revenue.toLocaleString()}` : "–"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* 5. LLM judge panel */}
+        {/* AI judge panel */}
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700">
               <Sparkles className="h-4 w-4 text-gray-400" />
-              Strategist analysis
+              AI insights — {activePhases.join(", ")}
             </h2>
             <button
               onClick={generateAnalysis}
               disabled={analysisLoading}
-              className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              style={{ backgroundColor: config.accent }}
             >
               {analysisLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {analysisLoading ? "Analysing…" : "Generate analysis"}
+              {analysisLoading ? "Analysing…" : "Generate insights"}
             </button>
           </div>
           {analysisError && (
@@ -373,7 +368,7 @@ Identify the top 3 performance gaps (where actual diverges most meaningfully fro
             <div className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm text-gray-800">{analysis}</div>
           )}
           {!analysis && !analysisError && !analysisLoading && (
-            <p className="text-xs text-gray-400">Click "Generate analysis" to have Claude review the gaps above and suggest next steps.</p>
+            <p className="text-xs text-gray-400">Click "Generate insights" for a Claude-written read of the {activePhases.join("/")} numbers above.</p>
           )}
         </div>
       </div>
