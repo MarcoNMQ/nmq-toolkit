@@ -1,3 +1,5 @@
+'use client';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -12,8 +14,8 @@ const tools = [
       </svg>
     ),
     accent: 'var(--color-brand-500)',
+    accentHex: '#FF6B2C',
     accentLight: 'var(--color-brand-50)',
-    accentHover: 'var(--color-brand-600)',
     badge: 'Google Ads · Facebook',
   },
   {
@@ -26,8 +28,8 @@ const tools = [
       </svg>
     ),
     accent: 'var(--color-mint-600)',
+    accentHex: '#00C896',
     accentLight: 'var(--color-mint-100)',
-    accentHover: '#009e78',
     badge: 'Multi-market · Multi-scenario',
   },
   {
@@ -40,8 +42,8 @@ const tools = [
       </svg>
     ),
     accent: '#4F46E5',
+    accentHex: '#4F46E5',
     accentLight: '#EEF2FF',
-    accentHover: '#4338CA',
     badge: 'Awareness · Consideration · Purchase',
   },
   {
@@ -54,11 +56,12 @@ const tools = [
       </svg>
     ),
     accent: '#7C3AED',
+    accentHex: '#7C3AED',
     accentLight: '#F5F3FF',
-    accentHover: '#6D28D9',
     badge: 'File · Google Sheet · Claude AI',
   },
 ];
+
 
 export default function Home() {
   return (
@@ -79,68 +82,112 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-        <div className="w-full max-w-5xl">
-          <div className="mb-12 text-center">
-            <h1 className="text-4xl font-extrabold tracking-tight text-ink-900 sm:text-5xl">
-              NMQ Toolkit
+      <main className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-16">
+        {/* Dot grid background */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+            opacity: 0.35,
+          }}
+        />
+        {/* Radial fade to white at edges */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: 'radial-gradient(ellipse 70% 60% at 50% 50%, transparent 0%, white 100%)',
+          }}
+        />
+
+        <div className="relative w-full max-w-5xl">
+          <motion.div
+            className="mb-12 text-center"
+            initial={{ opacity: 0, y: -18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          >
+            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, #FF6B2C 0%, #00C896 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                NMQ Toolkit
+              </span>
             </h1>
             <p className="mt-3 text-base text-ink-500">
               Everything you need to plan, build and measure paid media campaigns — in one place.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {tools.map((tool) => (
-              <Link
+            {tools.map((tool, i) => (
+              <motion.div
                 key={tool.href}
-                href={tool.href}
-                className="group relative flex flex-col rounded-2xl border border-ink-100 bg-white p-7 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-                style={
-                  {
-                    '--tool-accent': tool.accent,
-                    '--tool-accent-light': tool.accentLight,
-                  } as React.CSSProperties
-                }
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: i * 0.09 }}
+                className="h-full"
               >
-                {/* Accent top bar */}
-                <div
-                  className="absolute inset-x-0 top-0 h-1 rounded-t-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                  style={{ backgroundColor: tool.accent }}
-                />
-
-                {/* Icon */}
-                <div
-                  className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl transition-colors duration-200"
-                  style={{
-                    backgroundColor: tool.accentLight,
-                    color: tool.accent,
+                <Link
+                  href={tool.href}
+                  className="group relative flex h-full flex-col rounded-2xl border border-ink-100 bg-white p-7 shadow-sm transition-all duration-300 hover:-translate-y-1"
+                  style={
+                    {
+                      '--tool-accent': tool.accent,
+                      '--tool-accent-light': tool.accentLight,
+                    } as React.CSSProperties
+                  }
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 32px -8px ${tool.accentHex}35, 0 0 0 1px ${tool.accentHex}18`;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = '';
                   }}
                 >
-                  {tool.icon}
-                </div>
+                  {/* Accent top bar */}
+                  <div
+                    className="absolute inset-x-0 top-0 h-1 rounded-t-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                    style={{
+                      background: `linear-gradient(90deg, ${tool.accentHex}cc, ${tool.accentHex}66)`,
+                    }}
+                  />
 
-                {/* Text */}
-                <h2
-                  className="text-base font-bold text-ink-900 transition-colors duration-200 group-hover:text-[var(--tool-accent)]"
-                >
-                  {tool.label}
-                </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{tool.description}</p>
+                  {/* Icon */}
+                  <div
+                    className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110"
+                    style={{
+                      backgroundColor: tool.accentLight,
+                      color: tool.accent,
+                    }}
+                  >
+                    {tool.icon}
+                  </div>
 
-                {/* Badge */}
-                <span className="mt-5 inline-block self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide"
-                  style={{ backgroundColor: tool.accentLight, color: tool.accent }}>
-                  {tool.badge}
-                </span>
+                  {/* Text */}
+                  <h2 className="text-base font-bold text-ink-900 transition-colors duration-200 group-hover:text-[var(--tool-accent)]">
+                    {tool.label}
+                  </h2>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{tool.description}</p>
 
-                {/* Arrow */}
-                <span
-                  className="absolute bottom-6 right-6 text-ink-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--tool-accent)]"
-                >
-                  →
-                </span>
-              </Link>
+                  {/* Badge */}
+                  <span
+                    className="mt-5 inline-block self-start rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide"
+                    style={{ backgroundColor: tool.accentLight, color: tool.accent }}
+                  >
+                    {tool.badge}
+                  </span>
+
+                  {/* Arrow */}
+                  <span className="absolute bottom-6 right-6 text-ink-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--tool-accent)]">
+                    →
+                  </span>
+                </Link>
+              </motion.div>
             ))}
           </div>
         </div>

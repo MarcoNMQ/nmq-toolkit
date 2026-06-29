@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const TOOLS = [
   { href: '/campaign-builder', label: 'Campaign',   full: 'Campaign Builder' },
@@ -13,7 +14,6 @@ const TOOLS = [
 
 export default function AppNav() {
   const pathname = usePathname();
-  // Hide the nav when this page is loaded inside a workspace iframe
   const [inFrame, setInFrame] = useState(false);
   useEffect(() => {
     try { setInFrame(window.self !== window.top); } catch { setInFrame(true); }
@@ -44,13 +44,23 @@ export default function AppNav() {
                 key={t.href}
                 href={t.href}
                 title={t.full}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  active
-                    ? 'bg-ink-900 text-white'
-                    : 'text-ink-500 hover:bg-ink-50 hover:text-ink-900'
-                }`}
+                className="relative rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors"
               >
-                {t.label}
+                <AnimatePresence>
+                  {active && (
+                    <motion.span
+                      layoutId="nav-active-pill"
+                      className="absolute inset-0 rounded-lg bg-ink-900"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                </AnimatePresence>
+                <span className={`relative z-10 transition-colors duration-150 ${active ? 'text-white' : 'text-ink-500 hover:text-ink-900'}`}>
+                  {t.label}
+                </span>
               </Link>
             );
           })}

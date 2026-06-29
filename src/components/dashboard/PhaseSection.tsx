@@ -58,13 +58,14 @@ export default function PhaseSection({ label, color, kpis, phase }: PhaseSection
         </h3>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {cards.map((c) => (
+        {cards.map((c, i) => (
           <KpiCard
             key={c.key}
             label={c.label}
             value={fmt(kpis[c.key] as number | undefined, c.type)}
             sub={c.sub}
             accent={color}
+            index={i}
           />
         ))}
       </div>
