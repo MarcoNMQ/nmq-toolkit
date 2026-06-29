@@ -1,7 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
 import { useDashboardStore } from '@/lib/dashboard/store';
 import PhaseSection from './PhaseSection';
 import TrendChart from './TrendChart';
@@ -16,10 +14,10 @@ type TrendMetric = 'impressions' | 'clicks' | 'spend' | 'cpm' | 'ctr';
 
 const TREND_METRICS: Array<{ key: TrendMetric; label: string }> = [
   { key: 'impressions', label: 'Impressions' },
-  { key: 'clicks', label: 'Clicks' },
-  { key: 'spend', label: 'Spend' },
-  { key: 'cpm', label: 'CPM' },
-  { key: 'ctr', label: 'CTR' },
+  { key: 'clicks',      label: 'Clicks' },
+  { key: 'spend',       label: 'Spend' },
+  { key: 'cpm',         label: 'CPM' },
+  { key: 'ctr',         label: 'CTR' },
 ];
 
 const PHASE_COLORS = {
@@ -29,9 +27,9 @@ const PHASE_COLORS = {
 };
 
 const PHASE_LABELS = {
-  awareness: 'Awareness',
+  awareness:     'Awareness',
   consideration: 'Consideration',
-  conversion: 'Conversion',
+  conversion:    'Conversion',
 };
 
 export default function DashboardClient() {
@@ -53,15 +51,8 @@ export default function DashboardClient() {
   // ── Step: Pick data source ────────────────────────────────────────────────
   if (loadStep === 'pick') {
     return (
-      <div className="min-h-screen bg-white">
-        <header className="border-b border-ink-100 px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <Image src="/nmq-logo.png" alt="NMQ Digital" width={110} height={44} className="h-8 w-auto" />
-            <span className="text-sm text-ink-400">/</span>
-            <span className="text-sm font-semibold text-ink-700">Performance Dashboard</span>
-          </Link>
-        </header>
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-65px)] px-6 py-12">
+      <div className="h-full overflow-y-auto bg-white">
+        <div className="flex flex-col items-center justify-center min-h-full px-6 py-12">
           <div className="mb-10 text-center">
             <h1 className="text-3xl font-extrabold text-ink-900">Performance Dashboard</h1>
             <p className="mt-2 text-sm text-ink-500 max-w-md">
@@ -87,15 +78,8 @@ export default function DashboardClient() {
   // ── Step: Confirm column mapping ─────────────────────────────────────────
   if (loadStep === 'map') {
     return (
-      <div className="min-h-screen bg-white">
-        <header className="border-b border-ink-100 px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <Image src="/nmq-logo.png" alt="NMQ Digital" width={110} height={44} className="h-8 w-auto" />
-            <span className="text-sm text-ink-400">/</span>
-            <span className="text-sm font-semibold text-ink-700">Performance Dashboard</span>
-          </Link>
-        </header>
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-65px)] px-6 py-12">
+      <div className="h-full overflow-y-auto bg-white">
+        <div className="flex flex-col items-center justify-center min-h-full px-6 py-12">
           <ColumnMapper
             columns={rawColumns}
             initialMapping={suggestedMapping as ColumnMapping[]}
@@ -110,16 +94,11 @@ export default function DashboardClient() {
 
   // ── Step: Dashboard ready ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-ink-50">
-      {/* Header */}
-      <header className="border-b border-ink-100 bg-white px-6 py-3.5">
-        <div className="mx-auto flex max-w-screen-xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <Image src="/nmq-logo.png" alt="NMQ Digital" width={110} height={44} className="h-8 w-auto" />
-            </Link>
-            <span className="text-sm text-ink-400">/</span>
-            <span className="text-sm font-semibold text-ink-700">Performance Dashboard</span>
+    <div className="h-full overflow-y-auto bg-ink-50">
+      {/* Sub-header: data context + load button */}
+      <div className="border-b border-ink-100 bg-white px-6 py-2.5">
+        <div className="mx-auto flex max-w-screen-xl items-center justify-between">
+          <div className="flex items-center gap-2">
             {dataSource === 'demo' && (
               <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-600">
                 Demo data
@@ -133,11 +112,11 @@ export default function DashboardClient() {
             ↑ Load new data
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="mx-auto max-w-screen-xl px-6 py-6">
+      <div className="mx-auto max-w-screen-xl px-6 py-5">
         {/* Filters bar */}
-        <div className="mb-6 flex flex-wrap items-end gap-4 rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
+        <div className="mb-5 flex flex-wrap items-end gap-4 rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-ink-400">From</label>
             <input
@@ -185,7 +164,6 @@ export default function DashboardClient() {
             </div>
           )}
 
-          {/* Funnel stage toggles */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-ink-400">Funnel Stage</label>
             <div className="flex gap-1.5">
@@ -214,10 +192,7 @@ export default function DashboardClient() {
           </div>
 
           {(filters.markets.length > 0 || filters.channels.length > 0) && (
-            <button
-              onClick={() => setFilters({ markets: [], channels: [] })}
-              className="self-end text-xs text-ink-400 hover:text-ink-700"
-            >
+            <button onClick={() => setFilters({ markets: [], channels: [] })} className="self-end text-xs text-ink-400 hover:text-ink-700">
               Clear
             </button>
           )}
@@ -225,7 +200,7 @@ export default function DashboardClient() {
 
         {/* Tab nav */}
         {totals && (
-          <div className="mb-6 flex gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-sm w-fit">
+          <div className="mb-5 flex gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-sm w-fit">
             {(['overview', 'breakdown', 'ai'] as const).map((tab) => (
               <button
                 key={tab}
@@ -240,20 +215,13 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {/* Overview */}
         {activeTab === 'overview' && totals && (
-          <div className="space-y-8">
+          <div className="space-y-7">
             {STAGES.map((stage) => {
               const stageKpis = byFunnelStage[stage];
               if (!stageKpis || !filters.funnelStages.includes(stage)) return null;
               return (
-                <PhaseSection
-                  key={stage}
-                  phase={stage}
-                  label={PHASE_LABELS[stage]}
-                  color={PHASE_COLORS[stage]}
-                  kpis={stageKpis}
-                />
+                <PhaseSection key={stage} phase={stage} label={PHASE_LABELS[stage]} color={PHASE_COLORS[stage]} kpis={stageKpis} />
               );
             })}
 
@@ -279,7 +247,6 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {/* Breakdown */}
         {activeTab === 'breakdown' && totals && (
           <div className="rounded-xl border border-ink-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
@@ -302,7 +269,6 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {/* AI */}
         {activeTab === 'ai' && totals && (
           <div className="rounded-xl border border-ink-100 bg-white p-5 shadow-sm">
             <AiPanel />

@@ -4,7 +4,7 @@ import { MobileMenuButton } from '@/components/mediaplan/MobileMenuButton';
 
 export default function MediaPlanPage() {
   return (
-    <div className="flex h-screen bg-ink-50">
+    <div className="flex h-full bg-ink-50">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <MobileMenuButton />
