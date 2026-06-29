@@ -39,12 +39,7 @@ export default function WorkspacePage() {
           exclude={rightTool}
           label="Left"
         />
-        <iframe
-          key={leftTool}
-          src={leftTool}
-          title="Left panel"
-          className="flex-1 border-0"
-        />
+        <FrameSet active={leftTool} side="left" />
       </div>
 
       {/* Resize divider */}
@@ -66,13 +61,26 @@ export default function WorkspacePage() {
           exclude={leftTool}
           label="Right"
         />
-        <iframe
-          key={rightTool}
-          src={rightTool}
-          title="Right panel"
-          className="flex-1 border-0"
-        />
+        <FrameSet active={rightTool} side="right" />
       </div>
+    </div>
+  );
+}
+
+// Renders all three tool iframes at once; only the active one is visible.
+// This keeps iframe state alive when the user switches tools in the dropdown.
+function FrameSet({ active, side }: { active: string; side: string }) {
+  return (
+    <div className="relative flex-1 overflow-hidden">
+      {TOOLS.map((t) => (
+        <iframe
+          key={`${side}-${t.href}`}
+          src={t.href}
+          title={`${side} — ${t.label}`}
+          className="absolute inset-0 h-full w-full border-0"
+          style={{ visibility: t.href === active ? 'visible' : 'hidden', zIndex: t.href === active ? 1 : 0 }}
+        />
+      ))}
     </div>
   );
 }

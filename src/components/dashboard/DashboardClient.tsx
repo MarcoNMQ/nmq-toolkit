@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDashboardStore } from '@/lib/dashboard/store';
 import PhaseSection from './PhaseSection';
 import TrendChart from './TrendChart';
@@ -44,7 +44,8 @@ export default function DashboardClient() {
   const [activeTab, setActiveTab] = useState<'overview' | 'breakdown' | 'ai'>('overview');
   const [trendMetric, setTrendMetric] = useState<TrendMetric>('impressions');
 
-  useEffect(() => { loadDemo(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Don't auto-load — preserve whatever the store already has across navigations.
+  // Users explicitly pick demo or upload from the picker.
 
   const STAGES = ['awareness', 'consideration', 'conversion'] as const;
 
