@@ -44,6 +44,20 @@ const tools = [
     accentHover: '#4338CA',
     badge: 'Awareness · Consideration · Purchase',
   },
+  {
+    href: '/insights',
+    label: 'AI Insight Generator',
+    description: 'Upload any campaign export and get a full strategic analysis written by Claude — no setup required.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.091zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+      </svg>
+    ),
+    accent: '#7C3AED',
+    accentLight: '#F5F3FF',
+    accentHover: '#6D28D9',
+    badge: 'File · Google Sheet · Claude AI',
+  },
 ];
 
 export default function Home() {
@@ -66,7 +80,7 @@ export default function Home() {
 
       {/* Hero */}
       <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-        <div className="w-full max-w-4xl">
+        <div className="w-full max-w-5xl">
           <div className="mb-12 text-center">
             <h1 className="text-4xl font-extrabold tracking-tight text-ink-900 sm:text-5xl">
               NMQ Toolkit
@@ -76,7 +90,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {tools.map((tool) => (
               <Link
                 key={tool.href}

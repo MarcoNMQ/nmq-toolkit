@@ -8,6 +8,7 @@ const TOOLS = [
   { href: '/campaign-builder', label: 'Campaign',   full: 'Campaign Builder' },
   { href: '/media-plan',       label: 'Media Plan', full: 'Media Plan Builder' },
   { href: '/dashboard',        label: 'Dashboard',  full: 'Performance Dashboard' },
+  { href: '/insights',         label: 'AI Insights', full: 'AI Insight Generator' },
 ];
 
 export default function AppNav() {

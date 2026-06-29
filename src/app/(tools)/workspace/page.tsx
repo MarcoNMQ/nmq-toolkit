@@ -5,6 +5,7 @@ const TOOLS = [
   { href: '/campaign-builder', label: 'Campaign Builder' },
   { href: '/media-plan',       label: 'Media Plan Builder' },
   { href: '/dashboard',        label: 'Performance Dashboard' },
+  { href: '/insights',         label: 'AI Insight Generator' },
 ];
 
 export default function WorkspacePage() {
