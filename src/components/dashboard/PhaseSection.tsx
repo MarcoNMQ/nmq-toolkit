@@ -1,5 +1,6 @@
 'use client';
 import KpiCard from './KpiCard';
+import { METRIC_DEFS, type MetricKey } from '@/lib/dashboard/metrics';
 import type { KpiBlock } from '@/lib/dashboard/types';
 
 function fmt(n: number | undefined, type: 'int' | 'eur' | 'pct' | 'dec'): string {
@@ -66,6 +67,7 @@ export default function PhaseSection({ label, color, kpis, phase }: PhaseSection
             sub={c.sub}
             accent={color}
             index={i}
+            description={METRIC_DEFS[c.key as MetricKey]?.description}
           />
         ))}
       </div>

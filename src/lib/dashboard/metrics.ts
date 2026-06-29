@@ -13,25 +13,26 @@ export interface MetricDef {
   format: MetricFormat;
   category: MetricCategory;
   order: number;
+  description: string;
 }
 
 export const METRIC_DEFS: Record<MetricKey, MetricDef> = {
-  impressions:        { label: 'Impressions',       shortLabel: 'Impr.',    format: 'int', category: 'delivery',   order: 1 },
-  clicks:             { label: 'Clicks',             shortLabel: 'Clicks',   format: 'int', category: 'delivery',   order: 2 },
-  spend:              { label: 'Spend',              shortLabel: 'Spend',    format: 'eur', category: 'delivery',   order: 3 },
-  link_clicks:        { label: 'Link Clicks',        shortLabel: 'L.Clicks', format: 'int', category: 'delivery',   order: 4 },
-  landing_page_views: { label: 'LP Views',           shortLabel: 'LPV',      format: 'int', category: 'delivery',   order: 5 },
-  engagements:        { label: 'Engagements',        shortLabel: 'Eng.',     format: 'int', category: 'delivery',   order: 6 },
-  video_plays:        { label: 'Video Plays',        shortLabel: 'V.Plays',  format: 'int', category: 'video',      order: 7 },
-  video_100:          { label: 'Completions',        shortLabel: 'Compl.',   format: 'int', category: 'video',      order: 8 },
-  conversions:        { label: 'Conversions',        shortLabel: 'Conv.',    format: 'int', category: 'conversion', order: 9 },
-  revenue:            { label: 'Revenue',            shortLabel: 'Rev.',     format: 'eur', category: 'conversion', order: 10 },
-  ctr:                { label: 'CTR',                shortLabel: 'CTR',      format: 'pct', category: 'rate',       order: 11 },
-  cpc:                { label: 'CPC',                shortLabel: 'CPC',      format: 'eur', category: 'rate',       order: 12 },
-  cpm:                { label: 'CPM',                shortLabel: 'CPM',      format: 'eur', category: 'rate',       order: 13 },
-  roas:               { label: 'ROAS',               shortLabel: 'ROAS',     format: 'x',   category: 'conversion', order: 14 },
-  cvr:                { label: 'CVR',                shortLabel: 'CVR',      format: 'pct', category: 'rate',       order: 15 },
-  vtr:                { label: 'VTR',                shortLabel: 'VTR',      format: 'pct', category: 'video',      order: 16 },
+  impressions:        { label: 'Impressions',       shortLabel: 'Impr.',    format: 'int', category: 'delivery',   order: 1,  description: 'How many times your ads were shown. The raw reach figure — good for awareness but says nothing about quality.' },
+  clicks:             { label: 'Clicks',             shortLabel: 'Clicks',   format: 'int', category: 'delivery',   order: 2,  description: 'How many times someone clicked your ad. The primary volume metric for traffic and lead gen campaigns.' },
+  spend:              { label: 'Spend',              shortLabel: 'Spend',    format: 'eur', category: 'delivery',   order: 3,  description: 'Total budget consumed. Watch this against your pacing target to catch under- or over-delivery early.' },
+  link_clicks:        { label: 'Link Clicks',        shortLabel: 'L.Clicks', format: 'int', category: 'delivery',   order: 4,  description: 'Clicks specifically on links within your ad, as reported by social platforms. Usually lower than total clicks.' },
+  landing_page_views: { label: 'LP Views',           shortLabel: 'LPV',      format: 'int', category: 'delivery',   order: 5,  description: 'Users who actually loaded your landing page. Lower than clicks because some users click but bounce before the page loads.' },
+  engagements:        { label: 'Engagements',        shortLabel: 'Eng.',     format: 'int', category: 'delivery',   order: 6,  description: 'Likes, comments, shares, reactions, and saves. Core quality signal for social awareness and consideration ads.' },
+  video_plays:        { label: 'Video Plays',        shortLabel: 'V.Plays',  format: 'int', category: 'video',      order: 7,  description: 'Number of times your video started playing, including auto-play. A high-level reach metric for video campaigns.' },
+  video_100:          { label: 'Completions',        shortLabel: 'Compl.',   format: 'int', category: 'video',      order: 8,  description: 'Users who watched 100% of your video. Key quality signal — a high completion rate means the creative holds attention.' },
+  conversions:        { label: 'Conversions',        shortLabel: 'Conv.',    format: 'int', category: 'conversion', order: 9,  description: 'Goal completions: form fills, purchases, sign-ups, or whatever event you\'re tracking as a conversion.' },
+  revenue:            { label: 'Revenue',            shortLabel: 'Rev.',     format: 'eur', category: 'conversion', order: 10, description: 'Total attributed revenue from your ads. Pair with ROAS to assess e-commerce efficiency.' },
+  ctr:                { label: 'CTR',                shortLabel: 'CTR',      format: 'pct', category: 'rate',       order: 11, description: 'Click-through rate — clicks ÷ impressions. Measures how relevant your creative and audience targeting are.' },
+  cpc:                { label: 'CPC',                shortLabel: 'CPC',      format: 'eur', category: 'rate',       order: 12, description: 'Cost per click — spend ÷ clicks. Lower is better for traffic and lead gen. High CPC can signal strong competition or weak CTR.' },
+  cpm:                { label: 'CPM',                shortLabel: 'CPM',      format: 'eur', category: 'rate',       order: 13, description: 'Cost per 1,000 impressions — the reach efficiency metric. Lower CPM means you\'re buying reach more cheaply. Core for awareness campaigns.' },
+  roas:               { label: 'ROAS',               shortLabel: 'ROAS',     format: 'x',   category: 'conversion', order: 14, description: 'Return on ad spend — revenue ÷ spend. A ROAS of 4× means €4 revenue per €1 spent. The main e-commerce efficiency metric.' },
+  cvr:                { label: 'CVR',                shortLabel: 'CVR',      format: 'pct', category: 'rate',       order: 15, description: 'Conversion rate — conversions ÷ clicks. Shows how well your landing page or checkout funnel is converting traffic into results.' },
+  vtr:                { label: 'VTR',                shortLabel: 'VTR',      format: 'pct', category: 'video',      order: 16, description: 'View-through rate — completions ÷ impressions. Core quality metric for video. Higher VTR means the creative grabs and holds attention.' },
 };
 
 export const METRIC_CATEGORIES: Array<{ key: MetricCategory; label: string }> = [

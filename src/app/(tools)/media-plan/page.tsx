@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/mediaplan/Sidebar';
 import { MainPanel } from '@/components/mediaplan/MainPanel';
 import { MobileMenuButton } from '@/components/mediaplan/MobileMenuButton';
+import { GuidePanel } from '@/components/mediaplan/GuidePanel';
 
 export default function MediaPlanPage() {
   return (
@@ -10,6 +11,7 @@ export default function MediaPlanPage() {
         <MobileMenuButton />
         <MainPanel />
       </main>
+      <GuidePanel />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import DataSourcePicker from '@/components/dashboard/DataSourcePicker';
 import { detectColumns, applyMapping } from '@/lib/dashboard/columnDetect';
 import { aggregateKpis, buildBreakdown, applyFilters } from '@/lib/dashboard/aggregate';
 import { formatMetric } from '@/lib/dashboard/metrics';
+import KpiMatrixPanel from './KpiMatrixPanel';
 
 type Step = 'upload' | 'ready' | 'generating' | 'done';
 
@@ -174,6 +175,7 @@ export default function InsightsClient() {
   const [deepMode, setDeepMode] = useState(false);
   const [insightsText, setInsightsText] = useState('');
   const [error, setError] = useState('');
+  const [guideOpen, setGuideOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
   function handleData(data: { columns: string[]; rows: Record<string, string>[] }) {
@@ -256,7 +258,8 @@ export default function InsightsClient() {
   if (step === 'ready' && summary) {
     return (
       <div className="h-full overflow-y-auto bg-ink-50">
-        <div className="mx-auto max-w-4xl w-full px-6 py-12">
+        <div className="mx-auto max-w-6xl w-full px-6 py-12 flex gap-5 items-start">
+          <div className="flex-1 min-w-0">
           <div className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-bold text-ink-900">Data loaded</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -312,6 +315,8 @@ export default function InsightsClient() {
               </button>
             </div>
           </div>
+          </div>{/* end flex-1 */}
+          <KpiMatrixPanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
         </div>
       </div>
     );
@@ -321,17 +326,20 @@ export default function InsightsClient() {
   if (step === 'generating') {
     return (
       <div className="h-full overflow-y-auto bg-ink-50">
-        <div className="mx-auto max-w-4xl w-full px-6 py-12">
-          <div className="mb-3 flex items-center gap-2">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
-            <span className="text-xs font-semibold text-ink-400">Claude is analysing your data…</span>
+        <div className="mx-auto max-w-6xl w-full px-6 py-12 flex gap-5 items-start">
+          <div className="flex-1 min-w-0">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
+              <span className="text-xs font-semibold text-ink-400">Claude is analysing your data…</span>
+            </div>
+            <div className="rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-ink-700 leading-relaxed">
+                {insightsText}
+                <span className="animate-pulse text-violet-400">▌</span>
+              </pre>
+            </div>
           </div>
-          <div className="rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-ink-700 leading-relaxed">
-              {insightsText}
-              <span className="animate-pulse text-violet-400">▌</span>
-            </pre>
-          </div>
+          <KpiMatrixPanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
         </div>
       </div>
     );
@@ -342,58 +350,61 @@ export default function InsightsClient() {
 
   return (
     <div className="h-full overflow-y-auto bg-ink-50">
-      <div className="mx-auto max-w-4xl w-full px-6 py-8">
-        {/* Header bar */}
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-violet-500" />
-            <span className="text-xs font-semibold text-ink-400">
-              Analysis complete · {deepMode ? 'Sonnet' : 'Haiku'} · {summary?.dateRange}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigator.clipboard.writeText(insightsText)}
-              className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-50 transition"
-            >
-              Copy text
-            </button>
-            <button
-              onClick={reset}
-              className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-50 transition"
-            >
-              New analysis
-            </button>
-          </div>
-        </div>
-
-        {/* Section cards */}
-        <div className="space-y-4">
-          {sections.map((section) => {
-            const color = SECTION_COLORS[section.title] ?? '#7C3AED';
-            return (
-              <div
-                key={section.title}
-                className="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm"
+      <div className="mx-auto max-w-6xl w-full px-6 py-8 flex gap-5 items-start">
+        <div className="flex-1 min-w-0">
+          {/* Header bar */}
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-violet-500" />
+              <span className="text-xs font-semibold text-ink-400">
+                Analysis complete · {deepMode ? 'Sonnet' : 'Haiku'} · {summary?.dateRange}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(insightsText)}
+                className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-50 transition"
               >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <h3 className="text-sm font-bold text-ink-900">{section.title}</h3>
-                </div>
-                {renderContent(section.content)}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* If parsing failed — fallback to raw */}
-        {!sections.length && (
-          <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-ink-700 leading-relaxed">
-              {insightsText}
-            </pre>
+                Copy text
+              </button>
+              <button
+                onClick={reset}
+                className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-50 transition"
+              >
+                New analysis
+              </button>
+            </div>
           </div>
-        )}
+
+          {/* Section cards */}
+          <div className="space-y-4">
+            {sections.map((section) => {
+              const color = SECTION_COLORS[section.title] ?? '#7C3AED';
+              return (
+                <div
+                  key={section.title}
+                  className="rounded-2xl border border-ink-100 bg-white p-5 shadow-sm"
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                    <h3 className="text-sm font-bold text-ink-900">{section.title}</h3>
+                  </div>
+                  {renderContent(section.content)}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* If parsing failed — fallback to raw */}
+          {!sections.length && (
+            <div className="rounded-2xl border border-ink-100 bg-white p-6 shadow-sm">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-ink-700 leading-relaxed">
+                {insightsText}
+              </pre>
+            </div>
+          )}
+        </div>
+        <KpiMatrixPanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
       </div>
     </div>
   );
