@@ -256,7 +256,7 @@ export default function InsightsClient() {
   if (step === 'ready' && summary) {
     return (
       <div className="h-full overflow-y-auto bg-ink-50">
-        <div className="mx-auto max-w-2xl px-6 py-12">
+        <div className="mx-auto max-w-4xl w-full px-6 py-12">
           <div className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-bold text-ink-900">Data loaded</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -321,7 +321,7 @@ export default function InsightsClient() {
   if (step === 'generating') {
     return (
       <div className="h-full overflow-y-auto bg-ink-50">
-        <div className="mx-auto max-w-2xl px-6 py-12">
+        <div className="mx-auto max-w-4xl w-full px-6 py-12">
           <div className="mb-3 flex items-center gap-2">
             <div className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
             <span className="text-xs font-semibold text-ink-400">Claude is analysing your data…</span>
@@ -342,7 +342,7 @@ export default function InsightsClient() {
 
   return (
     <div className="h-full overflow-y-auto bg-ink-50">
-      <div className="mx-auto max-w-2xl px-6 py-8">
+      <div className="mx-auto max-w-4xl w-full px-6 py-8">
         {/* Header bar */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">

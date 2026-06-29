@@ -61,7 +61,7 @@ export default function DataSourcePicker({ onData }: DataSourcePickerProps) {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-2xl w-full">
       {/* Mode toggle */}
       <div className="mb-6 flex gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-sm w-fit">
         {(['upload', 'sheet'] as const).map((m) => (

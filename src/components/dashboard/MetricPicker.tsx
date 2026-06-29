@@ -42,7 +42,7 @@ export default function MetricPicker({ available, selected, onChange }: MetricPi
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-ink-100 bg-white p-3 shadow-lg">
+        <div className="absolute right-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-ink-100 bg-white p-3 shadow-lg">
           <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-400">
             Select metrics to display
           </p>
