@@ -61,23 +61,53 @@ export function formatMetric(key: MetricKey, val: number | undefined): string {
   }
 }
 
-// Default metrics per channel name pattern
-const CHANNEL_METRIC_DEFAULTS: Array<{ pattern: RegExp; metrics: MetricKey[] }> = [
-  { pattern: /youtube|demand.?gen|video/i,     metrics: ['impressions', 'spend', 'video_plays', 'video_100', 'vtr', 'cpm'] },
-  { pattern: /search|pmax|performance.?max/i,  metrics: ['impressions', 'clicks', 'spend', 'ctr', 'cpc', 'conversions'] },
-  { pattern: /shopping/i,                      metrics: ['impressions', 'clicks', 'spend', 'conversions', 'roas', 'cpc'] },
-  { pattern: /linkedin/i,                      metrics: ['impressions', 'spend', 'clicks', 'ctr', 'cpm', 'engagements'] },
-  { pattern: /facebook|instagram|meta|social/i, metrics: ['impressions', 'spend', 'clicks', 'ctr', 'cpm', 'link_clicks'] },
-];
+// ── KPI Matrix defaults (sourced from kpi_matrix.py) ────────────────────────
+// Reflects core/secondary KPIs per channel × phase combination.
+// When a single phase is active, phase-specific defaults win over channel-only.
+// CTR/CPC are explicitly diagnostic at awareness stage per the KPI matrix.
 
-const DEFAULT_METRICS: MetricKey[] = ['impressions', 'spend', 'clicks', 'ctr', 'cpm'];
+export function defaultMetricsForChannels(channels: string[], phases: string[] = []): MetricKey[] {
+  const singlePhase = phases.length === 1 ? phases[0] : null;
 
-export function defaultMetricsForChannels(channels: string[]): MetricKey[] {
-  if (!channels.length) return DEFAULT_METRICS;
-  for (const ch of channels) {
-    for (const { pattern, metrics } of CHANNEL_METRIC_DEFAULTS) {
-      if (pattern.test(ch)) return metrics;
-    }
+  const has = (re: RegExp) => channels.some((ch) => re.test(ch));
+  const isVideo    = has(/youtube|demand.?gen|video/i);
+  const isSearch   = has(/search|pmax|performance.?max/i);
+  const isShopping = has(/shopping/i);
+  const isLinkedIn = has(/linkedin/i);
+  const isSocial   = has(/facebook|instagram|meta|tiktok|social/i);
+
+  // ── Single phase active → phase-first defaults ──────────────────────────
+  if (singlePhase === 'awareness') {
+    // YouTube / video / social: CPM, VTR, Views are core; CTR is diagnostic
+    if (isVideo || isSocial) return ['impressions', 'spend', 'cpm', 'video_plays', 'vtr', 'engagements'];
+    // LinkedIn awareness: CPM, Reach, Frequency, VTR (video)
+    if (isLinkedIn)          return ['impressions', 'spend', 'cpm', 'engagements', 'vtr'];
+    // Display / other: CPM, Impressions (not CTR)
+    return ['impressions', 'cpm', 'spend'];
   }
-  return DEFAULT_METRICS;
+
+  if (singlePhase === 'consideration') {
+    // LinkedIn consideration: Engagement Rate is core
+    if (isLinkedIn)  return ['clicks', 'ctr', 'cpc', 'engagements', 'landing_page_views', 'spend'];
+    // YouTube / Demand Gen consideration: Clicks, CTR, CPC, LPV
+    if (isVideo)     return ['clicks', 'ctr', 'cpc', 'landing_page_views', 'video_plays', 'spend'];
+    // Search / Display consideration
+    return ['clicks', 'ctr', 'cpc', 'landing_page_views', 'impressions', 'spend'];
+  }
+
+  if (singlePhase === 'conversion') {
+    // Search / Shopping / PMax: CPA, Conversions, CVR, CPC, ROAS
+    if (isSearch || isShopping) return ['conversions', 'cvr', 'cpc', 'roas', 'clicks', 'spend'];
+    // LinkedIn Lead Gen / others
+    return ['conversions', 'cvr', 'cpc', 'clicks', 'spend'];
+  }
+
+  // ── No phase filter or multi-phase → channel-only defaults ──────────────
+  if (!channels.length)  return ['impressions', 'spend', 'clicks', 'ctr', 'cpm'];
+  if (isVideo)           return ['impressions', 'spend', 'video_plays', 'video_100', 'vtr', 'cpm'];
+  if (isSearch)          return ['impressions', 'clicks', 'spend', 'ctr', 'cpc', 'conversions'];
+  if (isShopping)        return ['impressions', 'clicks', 'spend', 'conversions', 'roas', 'cpc'];
+  if (isLinkedIn)        return ['impressions', 'spend', 'clicks', 'ctr', 'cpm', 'engagements'];
+  if (isSocial)          return ['impressions', 'spend', 'clicks', 'ctr', 'cpm', 'link_clicks'];
+  return ['impressions', 'spend', 'clicks', 'ctr', 'cpm'];
 }

@@ -55,31 +55,31 @@ export default function DashboardClient() {
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>([]);
   const [activeTrendMetric, setActiveTrendMetric] = useState<MetricKey>('impressions');
 
-  const prevChannelsRef = useRef<string>('[]');
+  const prevFiltersRef = useRef<string>('');
 
-  // When new data loads, set channel-appropriate metric defaults
+  // When new data loads, set channel+phase-appropriate metric defaults
   useEffect(() => {
     if (!availableMetrics.length) return;
-    const defaults = defaultMetricsForChannels(filters.channels)
+    const defaults = defaultMetricsForChannels(filters.channels, filters.funnelStages)
       .filter((m) => availableMetrics.includes(m));
     const effective = defaults.length ? defaults : availableMetrics.slice(0, 5);
     setSelectedMetrics(effective);
     setActiveTrendMetric(effective[0] ?? 'impressions');
-    prevChannelsRef.current = JSON.stringify(filters.channels);
+    prevFiltersRef.current = JSON.stringify([filters.channels, filters.funnelStages]);
   }, [availableMetrics]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When channel filter changes (after load), update defaults
+  // When channel or phase filter changes (after load), update defaults
   useEffect(() => {
-    const channelsStr = JSON.stringify(filters.channels);
-    if (channelsStr === prevChannelsRef.current || !availableMetrics.length) return;
-    prevChannelsRef.current = channelsStr;
-    const defaults = defaultMetricsForChannels(filters.channels)
+    const key = JSON.stringify([filters.channels, filters.funnelStages]);
+    if (key === prevFiltersRef.current || !availableMetrics.length) return;
+    prevFiltersRef.current = key;
+    const defaults = defaultMetricsForChannels(filters.channels, filters.funnelStages)
       .filter((m) => availableMetrics.includes(m));
     if (defaults.length) {
       setSelectedMetrics(defaults);
       setActiveTrendMetric(defaults[0]);
     }
-  }, [filters.channels]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.channels, filters.funnelStages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleMetricsChange(metrics: MetricKey[]) {
     setSelectedMetrics(metrics);
