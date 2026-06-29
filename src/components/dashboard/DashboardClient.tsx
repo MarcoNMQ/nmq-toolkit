@@ -9,8 +9,11 @@ import MetricPicker from './MetricPicker';
 import AiPanel from './AiPanel';
 import DataSourcePicker from './DataSourcePicker';
 import ColumnMapper from './ColumnMapper';
+import ComparePanel from './ComparePanel';
 import type { DashboardFilters } from '@/lib/dashboard/types';
 import type { ColumnMapping } from '@/lib/dashboard/columnDetect';
+import type { ParsedMediaPlan, CompareResult } from '@/lib/dashboard/mediaPlanTypes';
+import { buildCompareResult, buildCompareContext } from '@/lib/dashboard/compare';
 
 const PHASE_COLORS = {
   awareness:     '#7F77DD',
@@ -29,11 +32,26 @@ export default function DashboardClient() {
     loadStep, dataSource,
     rawColumns, suggestedMapping, unmappedColumns,
     filters, totals, byFunnelStage, trend, breakdown,
-    availableChannels, availableMarkets, availableMetrics,
+    availableChannels, availableMarkets, availableMetrics, allRows,
     loadDemo, setIngestData, confirmMapping, resetToPickStep, setFilters,
+    setCompareContext,
   } = useDashboardStore();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'ai'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'compare' | 'ai'>('overview');
+  const [mediaPlan, setMediaPlan] = useState<ParsedMediaPlan | null>(null);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
+
+  // Recompute comparison whenever rows or plan changes
+  useEffect(() => {
+    if (mediaPlan && allRows.length) {
+      const result = buildCompareResult(allRows, mediaPlan);
+      setCompareResult(result);
+      setCompareContext(buildCompareContext(result, mediaPlan.scenarioName));
+    } else {
+      setCompareResult(null);
+      setCompareContext(null);
+    }
+  }, [mediaPlan, allRows]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>([]);
   const [activeTrendMetric, setActiveTrendMetric] = useState<MetricKey>('impressions');
 
@@ -228,15 +246,19 @@ export default function DashboardClient() {
         {/* Tab nav */}
         {totals && (
           <div className="mb-5 flex gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-sm w-fit">
-            {(['overview', 'ai'] as const).map((tab) => (
+            {([
+              { key: 'overview', label: 'Overview' },
+              { key: 'compare', label: mediaPlan ? '⇄ Compare' : 'Compare' },
+              { key: 'ai', label: 'AI Insights' },
+            ] as const).map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
                 className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                  activeTab === tab ? 'bg-ink-900 text-white shadow-sm' : 'text-ink-500 hover:text-ink-900'
+                  activeTab === tab.key ? 'bg-ink-900 text-white shadow-sm' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
-                {tab === 'ai' ? 'AI Insights' : 'Overview'}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -331,6 +353,16 @@ export default function DashboardClient() {
             </div>
 
           </div>
+        )}
+
+        {/* ── COMPARE TAB ───────────────────────────────────────────────────── */}
+        {activeTab === 'compare' && totals && (
+          <ComparePanel
+            compareResult={compareResult}
+            mediaPlan={mediaPlan}
+            onPlanLoaded={(plan) => { setMediaPlan(plan); }}
+            onPlanRemoved={() => { setMediaPlan(null); setCompareResult(null); setCompareContext(null); }}
+          />
         )}
 
         {/* ── AI INSIGHTS TAB ───────────────────────────────────────────────── */}

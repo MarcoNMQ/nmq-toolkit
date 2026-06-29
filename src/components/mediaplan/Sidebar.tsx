@@ -132,7 +132,26 @@ export function Sidebar() {
             </Select>
           </Field>
           <Field label="Industry">
-            <TextInput value={plan.industry} onChange={(e) => setPlan({ industry: e.target.value })} placeholder="e.g. Fintech" />
+            <Select value={plan.industry} onChange={(e) => setPlan({ industry: e.target.value })}>
+              <option value="">Select industry…</option>
+              <option>Technology / SaaS</option>
+              <option>Financial Services</option>
+              <option>Healthcare &amp; Pharma</option>
+              <option>Manufacturing</option>
+              <option>Retail &amp; E-commerce</option>
+              <option>Automotive</option>
+              <option>Travel &amp; Hospitality</option>
+              <option>Education &amp; EdTech</option>
+              <option>Real Estate</option>
+              <option>Media &amp; Entertainment</option>
+              <option>Consumer Goods / FMCG</option>
+              <option>Logistics &amp; Supply Chain</option>
+              <option>Professional Services</option>
+              <option>Energy &amp; Utilities</option>
+              <option>Telecommunications</option>
+              <option>Non-Profit</option>
+              <option>Other</option>
+            </Select>
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-2">

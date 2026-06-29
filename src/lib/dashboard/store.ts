@@ -38,6 +38,7 @@ interface DashboardState {
   insightsText: string;
   recommendationsText: string;
   aiLoading: boolean;
+  compareContext: string | null;
 
   // Actions
   loadDemo: () => void;
@@ -45,6 +46,7 @@ interface DashboardState {
   confirmMapping: (mapping: ColumnMapping[]) => void;
   resetToPickStep: () => void;
   setFilters: (patch: Partial<DashboardFilters>) => void;
+  setCompareContext: (ctx: string | null) => void;
   fetchAi: (mode: 'insights' | 'recommendations') => Promise<void>;
 }
 
@@ -95,6 +97,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   insightsText: '',
   recommendationsText: '',
   aiLoading: false,
+  compareContext: null,
 
   loadDemo: () => {
     const allRows = getDummyRows();
@@ -143,8 +146,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     set({ filters, ...deriveAggregates(allRows, filters) });
   },
 
+  setCompareContext: (ctx) => set({ compareContext: ctx }),
+
   fetchAi: async (mode) => {
-    const { filters, totals, byFunnelStage } = get();
+    const { filters, totals, byFunnelStage, compareContext } = get();
     if (!totals) return;
     set({ aiLoading: true });
     try {
@@ -157,6 +162,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           kpis: totals,
           byStage: byFunnelStage,
           dateRange: `${filters.dateFrom} to ${filters.dateTo}`,
+          compareContext: compareContext ?? undefined,
         }),
       });
       const data = await res.json();

@@ -5,7 +5,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { kpis, byStage, client, dateRange, mode = 'insights' } = body;
+  const { kpis, byStage, client, dateRange, mode = 'insights', compareContext } = body;
 
   const kpiSummary = (block: Record<string, number | undefined>, label: string) => {
     const lines = [
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
           kpiSummary(block as Record<string, number>, `Funnel Stage: ${stage}`)
         )
       : []),
+    ...(compareContext ? ['', compareContext] : []),
   ].join('\n');
 
   const prompts: Record<string, string> = {
