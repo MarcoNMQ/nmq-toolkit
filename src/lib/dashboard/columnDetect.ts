@@ -17,23 +17,38 @@ export const COLUMN_ALIASES: Partial<Record<keyof AdRow, string[]>> = {
   funnel_stage:       ['funnel stage', 'funnel', 'objective', 'optimization goal', 'goal', 'campaign objective', 'funnel_stage', 'marketing objective'],
   spend:              ['spend', 'amount spent', 'amount spent (eur)', 'amount spent (usd)', 'cost', 'cost (*)', 'budget spent', 'total cost', 'total spend', 'advertising cost', 'ad spend'],
   impressions:        ['impressions', 'impr.', 'impr', 'total impressions', 'impression'],
+  // "clicks (all)" and "clicks (destination)" both strip to "clicks" via normalize — handled by ordering
   clicks:             ['clicks', 'clicks (all)', 'all clicks', 'total clicks', 'click'],
-  link_clicks:        ['link clicks', 'outbound clicks', 'website clicks', 'link click', 'url clicks'],
+  // Platform-specific link click names — listed before the generic "link clicks" fallback
+  link_clicks:        ['link clicks', 'clicks (destination)', 'destination clicks', 'outbound clicks', 'website clicks', 'link click', 'url clicks'],
   landing_page_views: ['landing page views', 'lpv', 'landing pages', 'page views', 'landing page view'],
   engagements:        ['engagements', 'post engagement', 'post engagements', 'total engagements', 'interactions', 'engagement'],
-  video_plays:        ['video plays', 'video views', 'views', '3-second video views', 'thruplay', 'video_plays', 'video play', 'video starts'],
+  video_plays:        [
+    'video plays', 'video views', 'views', 'video play', 'video starts',
+    '3-second video views', '2-second video views', '6-second video views',
+    'total video watched actions', 'thruplay', 'thruplays', 'video_plays',
+  ],
   video_25:           ['video watches at 25%', 'views (25%)', 'video 25%', '25% video views', 'video_25'],
   video_50:           ['video watches at 50%', 'views (50%)', 'video 50%', '50% video views', 'video_50'],
   video_75:           ['video watches at 75%', 'views (75%)', 'video 75%', '75% video views', 'video_75'],
-  video_100:          ['video watches at 100%', 'views (100%)', 'video 100%', 'completed views', 'video completions', '100% video views', 'video_100', 'video complete'],
-  conversions:        ['conversions', 'results', 'total conversions', 'website conversions', 'purchases', 'leads', 'goal completions', 'conversion'],
-  revenue:            ['revenue', 'conversion value', 'purchase conversion value', 'total value', 'purchase value', 'sales'],
-  ctr:                ['ctr', 'click through rate', 'click-through rate', 'ctr (link click-through rate)'],
-  cpc:                ['cpc', 'cost per click', 'cost per link click', 'avg. cpc'],
-  cpm:                ['cpm', 'cost per 1000 impressions', 'cost per 1,000 impressions', 'cost per mille'],
-  roas:               ['roas', 'return on ad spend', 'purchase roas'],
-  cvr:                ['cvr', 'conversion rate', 'conv. rate', 'website purchase roas'],
-  vtr:                ['vtr', 'video completion rate', 'video through rate', 'view through rate', 'vcr'],
+  video_100:          [
+    'video watches at 100%', 'views (100%)', 'video 100%', 'completed views',
+    'video completions', '100% video views', 'video_100', 'video complete',
+    'completed video views', 'video completion',
+  ],
+  conversions:        [
+    'conversions', 'results', 'total conversions', 'website conversions',
+    'purchases', 'website purchases', 'complete payment', 'total results',
+    'leads', 'goal completions', 'conversion', 'purchase',
+  ],
+  revenue:            ['revenue', 'conversion value', 'purchase conversion value', 'total value', 'purchase value', 'sales', 'transaction value'],
+  // Pre-calculated rate columns — platforms like TikTok, Meta, LinkedIn export these ready-made
+  ctr:                ['ctr', 'click through rate', 'click-through rate', 'ctr (link click-through rate)', 'ctr (all)', 'ctr (destination)', 'click-through rate (ctr)'],
+  cpc:                ['cpc', 'cost per click', 'cost per link click', 'avg. cpc', 'cpc (destination)', 'cost per destination click', 'cost per all click'],
+  cpm:                ['cpm', 'cost per 1000 impressions', 'cost per 1,000 impressions', 'cost per mille', 'cost per 1000 reached', 'cost per 1,000 reached', 'cpm (cost per mille)'],
+  roas:               ['roas', 'return on ad spend', 'purchase roas', 'website purchase roas', 'website purchase roas (return on ad spend)', 'return on investment', 'roi'],
+  cvr:                ['cvr', 'conversion rate', 'conv. rate', 'result rate', 'purchase rate', 'click to conversion rate'],
+  vtr:                ['vtr', 'video completion rate', 'video through rate', 'view through rate', 'vcr', 'video view rate', 'complete video rate'],
 };
 
 // Which fields are numeric (vs string/date)
@@ -58,7 +73,13 @@ export interface DetectionResult {
 }
 
 function normalize(s: string): string {
-  return s.toLowerCase().trim().replace(/[^a-z0-9 %()]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s*\([^)]*\)/g, '')   // strip parenthetical suffixes, e.g. (eur), (cost per click), (destination)
+    .replace(/[^a-z0-9 ]/g, ' ')    // remove remaining special chars
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function detectColumns(rawColumns: string[]): DetectionResult {
