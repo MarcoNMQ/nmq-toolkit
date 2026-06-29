@@ -1,3 +1,5 @@
+import type { MetricKey } from './metrics';
+
 // A single row of standardized ad data (one row = one day x campaign combination)
 export interface AdRow {
   date: string; // YYYY-MM-DD
@@ -57,31 +59,11 @@ export interface KpiBlock {
   frequency?: number;
 }
 
-// A data point in a time series (one entry per period label)
-export interface TrendPoint {
-  label: string; // e.g. "Jun 01", "Week 1"
-  impressions: number;
-  clicks: number;
-  spend: number;
-  conversions: number;
-  video_plays: number;
-  ctr: number;
-  cpm: number;
-}
+// A data point in a time series — all metric keys are optional; presence depends on data
+export type TrendPoint = { label: string } & Partial<Record<MetricKey, number>>;
 
-// A row in the breakdown table (by category, channel, market, etc.)
-export interface BreakdownRow {
-  dim: string;
-  impressions: number;
-  clicks: number;
-  spend: number;
-  conversions: number;
-  video_plays: number;
-  ctr: number;
-  cpc: number;
-  cpm: number;
-  roas?: number;
-}
+// A row in the breakdown table — all metric keys are optional
+export type BreakdownRow = { dim: string } & Partial<Record<MetricKey, number>>;
 
 // The full response from /api/dashboard/data
 export interface DashboardData {

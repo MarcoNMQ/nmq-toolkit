@@ -4,48 +4,41 @@ import {
   CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import type { TrendPoint } from '@/lib/dashboard/types';
+import { METRIC_DEFS, formatMetric, type MetricKey } from '@/lib/dashboard/metrics';
 
 interface TrendChartProps {
   data: TrendPoint[];
-  metric: 'impressions' | 'clicks' | 'spend' | 'cpm' | 'ctr';
+  metric: MetricKey;
   color?: string;
-}
-
-const METRIC_LABELS: Record<string, string> = {
-  impressions: 'Impressions',
-  clicks: 'Clicks',
-  spend: 'Spend (€)',
-  cpm: 'CPM (€)',
-  ctr: 'CTR (%)',
-};
-
-function formatY(metric: string, val: number): string {
-  if (metric === 'impressions' || metric === 'clicks') {
-    return val >= 1_000_000
-      ? `${(val / 1_000_000).toFixed(1)}M`
-      : val >= 1_000
-      ? `${(val / 1_000).toFixed(0)}K`
-      : String(val);
-  }
-  if (metric === 'spend' || metric === 'cpm') return `€${val.toFixed(0)}`;
-  if (metric === 'ctr') return `${(val * 100).toFixed(2)}%`;
-  return String(val);
 }
 
 export default function TrendChart({ data, metric, color = '#4F46E5' }: TrendChartProps) {
   if (!data.length) return <div className="flex h-48 items-center justify-center text-sm text-ink-400">No data</div>;
 
-  // For daily data with many points, sample to avoid overloading the chart
+  const def = METRIC_DEFS[metric];
+  const isPct = def?.format === 'pct';
+
+  // Sample dense data to keep the chart readable
   const displayData = data.length > 90
     ? data.filter((_, i) => i % Math.ceil(data.length / 60) === 0)
     : data;
 
-  const chartData = displayData.map((d) => ({
-    ...d,
-    ctr_pct: d.ctr * 100,
-  }));
+  // For pct metrics, multiply by 100 so recharts scales the Y axis correctly (e.g. 5 not 0.05)
+  const DISPLAY_KEY = '_v';
+  const chartData = displayData.map((d) => {
+    const raw = (d[metric] ?? 0) as number;
+    return { ...d, [DISPLAY_KEY]: isPct ? raw * 100 : raw };
+  });
 
-  const dataKey = metric === 'ctr' ? 'ctr_pct' : metric;
+  const tickFormatter = (v: number) => {
+    if (isPct) return `${v.toFixed(1)}%`;
+    return formatMetric(metric, isPct ? v / 100 : v);
+  };
+
+  const tooltipFormatter = (v: unknown) => {
+    const n = Number(v);
+    return [isPct ? `${n.toFixed(2)}%` : formatMetric(metric, n), def?.label ?? metric];
+  };
 
   return (
     <ResponsiveContainer width="100%" height={220}>
@@ -61,18 +54,18 @@ export default function TrendChart({ data, metric, color = '#4F46E5' }: TrendCha
           tick={{ fontSize: 11, fill: '#6b6b6b' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(v) => formatY(metric, v)}
-          width={52}
+          tickFormatter={tickFormatter}
+          width={54}
         />
         <Tooltip
-          formatter={(val) => [formatY(metric, Number(val)), METRIC_LABELS[metric]]}
+          formatter={tooltipFormatter}
           contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Line
           type="monotone"
-          dataKey={dataKey}
-          name={METRIC_LABELS[metric]}
+          dataKey={DISPLAY_KEY}
+          name={def?.label ?? metric}
           stroke={color}
           strokeWidth={2}
           dot={false}

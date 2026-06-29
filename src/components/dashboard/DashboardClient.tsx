@@ -1,24 +1,16 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDashboardStore } from '@/lib/dashboard/store';
+import { defaultMetricsForChannels, type MetricKey } from '@/lib/dashboard/metrics';
 import PhaseSection from './PhaseSection';
 import TrendChart from './TrendChart';
 import BreakdownTable from './BreakdownTable';
+import MetricPicker from './MetricPicker';
 import AiPanel from './AiPanel';
 import DataSourcePicker from './DataSourcePicker';
 import ColumnMapper from './ColumnMapper';
 import type { DashboardFilters } from '@/lib/dashboard/types';
 import type { ColumnMapping } from '@/lib/dashboard/columnDetect';
-
-type TrendMetric = 'impressions' | 'clicks' | 'spend' | 'cpm' | 'ctr';
-
-const TREND_METRICS: Array<{ key: TrendMetric; label: string }> = [
-  { key: 'impressions', label: 'Impressions' },
-  { key: 'clicks',      label: 'Clicks' },
-  { key: 'spend',       label: 'Spend' },
-  { key: 'cpm',         label: 'CPM' },
-  { key: 'ctr',         label: 'CTR' },
-];
 
 const PHASE_COLORS = {
   awareness:     '#7F77DD',
@@ -35,21 +27,52 @@ const PHASE_LABELS = {
 export default function DashboardClient() {
   const {
     loadStep, dataSource,
-    rawColumns, rawRows, suggestedMapping, unmappedColumns,
+    rawColumns, suggestedMapping, unmappedColumns,
     filters, totals, byFunnelStage, trend, breakdown,
-    availableChannels, availableMarkets,
+    availableChannels, availableMarkets, availableMetrics,
     loadDemo, setIngestData, confirmMapping, resetToPickStep, setFilters,
   } = useDashboardStore();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'breakdown' | 'ai'>('overview');
-  const [trendMetric, setTrendMetric] = useState<TrendMetric>('impressions');
+  const [activeTab, setActiveTab] = useState<'overview' | 'ai'>('overview');
+  const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>([]);
+  const [activeTrendMetric, setActiveTrendMetric] = useState<MetricKey>('impressions');
 
-  // Don't auto-load — preserve whatever the store already has across navigations.
-  // Users explicitly pick demo or upload from the picker.
+  const prevChannelsRef = useRef<string>('[]');
+
+  // When new data loads, set channel-appropriate metric defaults
+  useEffect(() => {
+    if (!availableMetrics.length) return;
+    const defaults = defaultMetricsForChannels(filters.channels)
+      .filter((m) => availableMetrics.includes(m));
+    const effective = defaults.length ? defaults : availableMetrics.slice(0, 5);
+    setSelectedMetrics(effective);
+    setActiveTrendMetric(effective[0] ?? 'impressions');
+    prevChannelsRef.current = JSON.stringify(filters.channels);
+  }, [availableMetrics]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When channel filter changes (after load), update defaults
+  useEffect(() => {
+    const channelsStr = JSON.stringify(filters.channels);
+    if (channelsStr === prevChannelsRef.current || !availableMetrics.length) return;
+    prevChannelsRef.current = channelsStr;
+    const defaults = defaultMetricsForChannels(filters.channels)
+      .filter((m) => availableMetrics.includes(m));
+    if (defaults.length) {
+      setSelectedMetrics(defaults);
+      setActiveTrendMetric(defaults[0]);
+    }
+  }, [filters.channels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleMetricsChange(metrics: MetricKey[]) {
+    setSelectedMetrics(metrics);
+    if (!metrics.includes(activeTrendMetric) && metrics.length) {
+      setActiveTrendMetric(metrics[0]);
+    }
+  }
 
   const STAGES = ['awareness', 'consideration', 'conversion'] as const;
 
-  // ── Step: Pick data source ────────────────────────────────────────────────
+  // ── Pick step ──────────────────────────────────────────────────────────────
   if (loadStep === 'pick') {
     return (
       <div className="h-full overflow-y-auto bg-white">
@@ -76,7 +99,7 @@ export default function DashboardClient() {
     );
   }
 
-  // ── Step: Confirm column mapping ─────────────────────────────────────────
+  // ── Map step ───────────────────────────────────────────────────────────────
   if (loadStep === 'map') {
     return (
       <div className="h-full overflow-y-auto bg-white">
@@ -93,10 +116,11 @@ export default function DashboardClient() {
     );
   }
 
-  // ── Step: Dashboard ready ─────────────────────────────────────────────────
+  // ── Ready ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full overflow-y-auto bg-ink-50">
-      {/* Sub-header: data context + load button */}
+
+      {/* Sub-header */}
       <div className="border-b border-ink-100 bg-white px-6 py-2.5">
         <div className="mx-auto flex max-w-screen-xl items-center justify-between">
           <div className="flex items-center gap-2">
@@ -116,13 +140,13 @@ export default function DashboardClient() {
       </div>
 
       <div className="mx-auto max-w-screen-xl px-6 py-5">
+
         {/* Filters bar */}
         <div className="mb-5 flex flex-wrap items-end gap-4 rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-ink-400">From</label>
             <input
-              type="date"
-              value={filters.dateFrom}
+              type="date" value={filters.dateFrom}
               onChange={(e) => setFilters({ dateFrom: e.target.value })}
               className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm focus:outline-none"
             />
@@ -130,8 +154,7 @@ export default function DashboardClient() {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-ink-400">To</label>
             <input
-              type="date"
-              value={filters.dateTo}
+              type="date" value={filters.dateTo}
               onChange={(e) => setFilters({ dateTo: e.target.value })}
               className="rounded-lg border border-ink-200 px-3 py-1.5 text-sm focus:outline-none"
             />
@@ -193,7 +216,10 @@ export default function DashboardClient() {
           </div>
 
           {(filters.markets.length > 0 || filters.channels.length > 0) && (
-            <button onClick={() => setFilters({ markets: [], channels: [] })} className="self-end text-xs text-ink-400 hover:text-ink-700">
+            <button
+              onClick={() => setFilters({ markets: [], channels: [] })}
+              className="self-end text-xs text-ink-400 hover:text-ink-700"
+            >
               Clear
             </button>
           )}
@@ -202,79 +228,118 @@ export default function DashboardClient() {
         {/* Tab nav */}
         {totals && (
           <div className="mb-5 flex gap-1 rounded-xl border border-ink-100 bg-white p-1 shadow-sm w-fit">
-            {(['overview', 'breakdown', 'ai'] as const).map((tab) => (
+            {(['overview', 'ai'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold capitalize transition ${
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                   activeTab === tab ? 'bg-ink-900 text-white shadow-sm' : 'text-ink-500 hover:text-ink-900'
                 }`}
               >
-                {tab === 'ai' ? 'AI Insights' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'ai' ? 'AI Insights' : 'Overview'}
               </button>
             ))}
           </div>
         )}
 
+        {/* ── OVERVIEW TAB ───────────────────────────────────────────────────── */}
         {activeTab === 'overview' && totals && (
-          <div className="space-y-7">
+          <div className="space-y-5">
+
+            {/* Funnel stage KPI cards */}
             {STAGES.map((stage) => {
               const stageKpis = byFunnelStage[stage];
               if (!stageKpis || !filters.funnelStages.includes(stage)) return null;
               return (
-                <PhaseSection key={stage} phase={stage} label={PHASE_LABELS[stage]} color={PHASE_COLORS[stage]} kpis={stageKpis} />
+                <PhaseSection
+                  key={stage}
+                  phase={stage}
+                  label={PHASE_LABELS[stage]}
+                  color={PHASE_COLORS[stage]}
+                  kpis={stageKpis}
+                />
               );
             })}
 
-            <div className="rounded-xl border border-ink-100 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-ink-900">Trend Over Time</h3>
-                <div className="flex gap-1">
-                  {TREND_METRICS.map((m) => (
-                    <button
-                      key={m.key}
-                      onClick={() => setTrendMetric(m.key)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                        trendMetric === m.key ? 'bg-ink-900 text-white' : 'bg-ink-50 text-ink-500 hover:bg-ink-100'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+            {/* Trend + Breakdown — unified panel */}
+            <div className="rounded-xl border border-ink-100 bg-white shadow-sm overflow-hidden">
+
+              {/* Panel header: title + metric picker */}
+              <div className="flex items-center justify-between border-b border-ink-100 px-5 py-3">
+                <h3 className="text-sm font-bold text-ink-900">Trend &amp; Breakdown</h3>
+                {availableMetrics.length > 0 && (
+                  <MetricPicker
+                    available={availableMetrics}
+                    selected={selectedMetrics}
+                    onChange={handleMetricsChange}
+                  />
+                )}
+              </div>
+
+              {/* Trend section */}
+              <div className="px-5 pt-4 pb-2">
+                {/* Metric pill selector — picks which metric to chart */}
+                {selectedMetrics.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    {selectedMetrics.map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setActiveTrendMetric(m)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                          activeTrendMetric === m
+                            ? 'bg-ink-900 text-white'
+                            : 'bg-ink-50 text-ink-500 hover:bg-ink-100'
+                        }`}
+                      >
+                        {m.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <TrendChart data={trend} metric={activeTrendMetric} color="#4F46E5" />
+              </div>
+
+              {/* Breakdown table — separated by a subtle divider */}
+              <div className="border-t border-ink-50 px-5 pb-5 pt-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+                    Breakdown
+                  </h4>
+                  <div className="flex gap-1">
+                    {(['channel', 'market', 'category', 'product_family'] as const).map((dim) => (
+                      <button
+                        key={dim}
+                        onClick={() => setFilters({ breakdownDim: dim })}
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize transition ${
+                          filters.breakdownDim === dim
+                            ? 'bg-ink-900 text-white'
+                            : 'bg-ink-50 text-ink-500 hover:bg-ink-100'
+                        }`}
+                      >
+                        {dim.replace('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                <BreakdownTable
+                  rows={breakdown}
+                  dimLabel={filters.breakdownDim.replace('_', ' ')}
+                  metrics={selectedMetrics.length ? selectedMetrics : ['impressions', 'spend', 'clicks', 'ctr', 'cpm']}
+                  accent="#4F46E5"
+                />
               </div>
-              <TrendChart data={trend} metric={trendMetric} color="#4F46E5" />
             </div>
+
           </div>
         )}
 
-        {activeTab === 'breakdown' && totals && (
-          <div className="rounded-xl border border-ink-100 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-ink-900">Breakdown</h3>
-              <div className="flex gap-1">
-                {(['category', 'channel', 'market', 'product_family'] as const).map((dim) => (
-                  <button
-                    key={dim}
-                    onClick={() => setFilters({ breakdownDim: dim })}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold capitalize transition ${
-                      filters.breakdownDim === dim ? 'bg-ink-900 text-white' : 'bg-ink-50 text-ink-500 hover:bg-ink-100'
-                    }`}
-                  >
-                    {dim.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <BreakdownTable rows={breakdown} dimLabel={filters.breakdownDim.replace('_', ' ')} accent="#4F46E5" />
-          </div>
-        )}
-
+        {/* ── AI INSIGHTS TAB ───────────────────────────────────────────────── */}
         {activeTab === 'ai' && totals && (
           <div className="rounded-xl border border-ink-100 bg-white p-5 shadow-sm">
             <AiPanel />
           </div>
         )}
+
       </div>
     </div>
   );

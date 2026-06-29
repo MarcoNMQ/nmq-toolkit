@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import type { DashboardFilters, KpiBlock, TrendPoint, BreakdownRow, AdRow } from './types';
 import type { ColumnMapping } from './columnDetect';
 import { applyMapping, detectColumns } from './columnDetect';
-import { aggregateKpis, aggregateByFunnelStage, buildTrend, buildBreakdown, applyFilters } from './aggregate';
+import { aggregateKpis, aggregateByFunnelStage, buildTrend, buildBreakdown, applyFilters, getAvailableMetrics } from './aggregate';
+import type { MetricKey } from './metrics';
 import { getDummyRows } from './dummyData';
 
 export type DataSource = 'demo' | 'upload' | 'sheet';
@@ -29,6 +30,7 @@ interface DashboardState {
   breakdown: BreakdownRow[];
   availableChannels: string[];
   availableMarkets: string[];
+  availableMetrics: MetricKey[];
   // UI state
   loading: boolean;
   error: string | null;
@@ -68,6 +70,7 @@ function deriveAggregates(allRows: AdRow[], filters: DashboardFilters) {
     breakdown: buildBreakdown(filtered, filters.breakdownDim),
     availableChannels: [...new Set(allRows.map((r) => r.channel).filter(Boolean) as string[])].sort(),
     availableMarkets: [...new Set(allRows.map((r) => r.market).filter(Boolean) as string[])].sort(),
+    availableMetrics: getAvailableMetrics(filtered),
   };
 }
 
@@ -86,6 +89,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   breakdown: [],
   availableChannels: [],
   availableMarkets: [],
+  availableMetrics: [],
   loading: false,
   error: null,
   insightsText: '',

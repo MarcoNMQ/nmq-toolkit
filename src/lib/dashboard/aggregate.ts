@@ -1,4 +1,5 @@
 import type { AdRow, KpiBlock, TrendPoint, BreakdownRow, DashboardFilters } from './types';
+import { METRIC_DEFS, type MetricKey } from './metrics';
 
 function safeDivide(a: number, b: number): number {
   return b === 0 ? 0 : a / b;
@@ -87,19 +88,10 @@ export function buildTrend(rows: AdRow[]): TrendPoint[] {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, dateRows]) => {
       const kpi = aggregateKpis(dateRows);
-      // Format label as "Jun 15"
       const d = new Date(date + 'T00:00:00');
       const label = d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
-      return {
-        label,
-        impressions: kpi.impressions,
-        clicks: kpi.clicks,
-        spend: kpi.spend,
-        conversions: kpi.conversions ?? 0,
-        video_plays: kpi.video_plays ?? 0,
-        ctr: kpi.ctr,
-        cpm: kpi.cpm,
-      };
+      // Spread all KpiBlock fields into the TrendPoint
+      return { label, ...kpi } as TrendPoint;
     });
 }
 
@@ -117,18 +109,19 @@ export function buildBreakdown(
   return Object.entries(byDim)
     .map(([dimVal, dimRows]) => {
       const kpi = aggregateKpis(dimRows);
-      return {
-        dim: dimVal,
-        impressions: kpi.impressions,
-        clicks: kpi.clicks,
-        spend: kpi.spend,
-        conversions: kpi.conversions ?? 0,
-        video_plays: kpi.video_plays ?? 0,
-        ctr: kpi.ctr,
-        cpc: kpi.cpc,
-        cpm: kpi.cpm,
-        roas: kpi.roas,
-      };
+      return { dim: dimVal, ...kpi } as BreakdownRow;
     })
-    .sort((a, b) => b.impressions - a.impressions);
+    .sort((a, b) => (b.spend ?? 0) - (a.spend ?? 0));
+}
+
+// Returns which metrics have non-zero values in the aggregated totals of the given rows.
+// Used to populate the MetricPicker with only relevant options.
+export function getAvailableMetrics(rows: AdRow[]): MetricKey[] {
+  if (!rows.length) return [];
+  const totals = aggregateKpis(rows);
+  const allKeys = Object.keys(METRIC_DEFS) as MetricKey[];
+  return allKeys.filter((key) => {
+    const val = (totals as unknown as Record<string, unknown>)[key];
+    return typeof val === 'number' && val > 0;
+  });
 }
