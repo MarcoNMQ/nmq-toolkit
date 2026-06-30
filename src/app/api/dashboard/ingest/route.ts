@@ -61,8 +61,28 @@ async function readSheet(sheetId: string, gid?: string | null): Promise<{ column
   return { columns, rows, sheetTabs };
 }
 
+// Detect BOM and decode UTF-16 / UTF-8 accordingly
+function decodeBuffer(buffer: ArrayBuffer): string {
+  const b = new Uint8Array(buffer);
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(buffer);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(buffer);
+  return new TextDecoder('utf-8').decode(buffer);
+}
+
+// Skip platform metadata rows (LinkedIn, Meta, Google Ads exports put 3-5 header lines
+// before the actual column row). Find the first line that contains known data keywords.
+const DATA_HEADER_RE = /\b(impression|click|spend|cost|date|campaign|channel|market|ctr|cpc|cpm|conv|roas|reach|view|video|engag|start|end|name)\b/i;
+function skipMetadataRows(text: string): string {
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+    if (DATA_HEADER_RE.test(lines[i])) return lines.slice(i).join('\n');
+  }
+  return text;
+}
+
 async function parseCsv(text: string): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
-  const result = Papa.parse<Record<string, string>>(text, {
+  const cleaned = skipMetadataRows(text);
+  const result = Papa.parse<Record<string, string>>(cleaned, {
     header: true,
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
@@ -118,7 +138,7 @@ export async function POST(req: NextRequest) {
       const name = file.name.toLowerCase();
 
       if (name.endsWith('.csv')) {
-        const text = new TextDecoder().decode(arrayBuf);
+        const text = decodeBuffer(arrayBuf);
         ({ columns, rows } = await parseCsv(text));
       } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
         ({ columns, rows } = await parseXlsx(arrayBuf));
