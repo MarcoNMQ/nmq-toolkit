@@ -8,6 +8,44 @@ import KpiMatrixPanel from './KpiMatrixPanel';
 
 type Step = 'upload' | 'ready' | 'generating' | 'done';
 
+const CLIENT_PROFILES: Record<string, { label: string; accentClass: string; analyses: string[] }> = {
+  generic: {
+    label: 'Generic',
+    accentClass: 'bg-ink-800 text-white',
+    analyses: [
+      'Channel performance comparison',
+      'Period over period (week vs week)',
+      'Budget pacing',
+      'Top & bottom performers',
+      'Audience segment analysis',
+    ],
+  },
+  rituals: {
+    label: 'Rituals',
+    accentClass: 'bg-amber-500 text-white',
+    analyses: [
+      'Creative A vs B performance',
+      'Week vs week performance',
+      'Awareness campaign analysis',
+      'Consideration campaign analysis',
+      'Conversion campaign analysis',
+      'Video completion & VTR',
+    ],
+  },
+  lineage: {
+    label: 'Lineage',
+    accentClass: 'bg-sky-600 text-white',
+    analyses: [
+      'MQL performance',
+      'SQL performance',
+      'MQL to SQL conversion rate',
+      'Lead to MQL rate',
+      'Pipeline contribution',
+      'Cost per MQL / SQL',
+    ],
+  },
+};
+
 interface DataSummary {
   rowCount: number;
   dateRange: string;
@@ -184,12 +222,25 @@ export default function InsightsClient() {
   const [step, setStep] = useState<Step>('upload');
   const [summary, setSummary] = useState<DataSummary | null>(null);
   const [deepMode, setDeepMode] = useState(false);
+  const [selectedClient, setSelectedClient] = useState('generic');
+  const [selectedAnalyses, setSelectedAnalyses] = useState<string[]>([]);
   const [customPrompt, setCustomPrompt] = useState('');
   const [insightsText, setInsightsText] = useState('');
   const [error, setError] = useState('');
   const [guideOpen, setGuideOpen] = useState(true);
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  function toggleAnalysis(analysis: string) {
+    setSelectedAnalyses((prev) =>
+      prev.includes(analysis) ? prev.filter((a) => a !== analysis) : [...prev, analysis]
+    );
+  }
+
+  function switchClient(client: string) {
+    setSelectedClient(client);
+    setSelectedAnalyses([]);
+  }
 
   async function copyText() {
     try {
@@ -227,8 +278,15 @@ export default function InsightsClient() {
     abortRef.current = ctrl;
 
     try {
-      const contextWithPrompt = customPrompt.trim()
-        ? `${summary.context}\n\nSPECIFIC ANALYSIS REQUEST:\n${customPrompt.trim()}`
+      const focusParts: string[] = [];
+      if (selectedAnalyses.length) {
+        focusParts.push(`Focus areas: ${selectedAnalyses.join(', ')}`);
+      }
+      if (customPrompt.trim()) {
+        focusParts.push(customPrompt.trim());
+      }
+      const contextWithPrompt = focusParts.length
+        ? `${summary.context}\n\nSPECIFIC ANALYSIS REQUEST:\n${focusParts.join('\n')}`
         : summary.context;
 
       const res = await fetch('/api/insights/generate', {
@@ -266,6 +324,7 @@ export default function InsightsClient() {
     setSummary(null);
     setInsightsText('');
     setCustomPrompt('');
+    setSelectedAnalyses([]);
     setError('');
   }
 
@@ -319,18 +378,65 @@ export default function InsightsClient() {
             <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
-          <div className="mb-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-sm">
-            <label className="mb-1.5 block text-xs font-semibold text-ink-400 uppercase tracking-wider">
-              Focus (optional)
-            </label>
-            <textarea
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              rows={3}
-              placeholder="Tell Claude what to focus on — e.g. &quot;Compare link clicks vs impressions across channels&quot; or &quot;Analyse A/B creative test between Campaign A and B&quot; or &quot;Focus on YouTube video completion rates&quot;"
-              className="w-full resize-none rounded-xl border border-ink-200 px-4 py-3 text-sm text-ink-700 placeholder:text-ink-300 focus:border-violet-400 focus:outline-none"
-            />
-            <p className="mt-1.5 text-[11px] text-ink-400">Leave empty for a general analysis across all available data.</p>
+          <div className="mb-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-sm space-y-4">
+            {/* Client selector */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Client</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(CLIENT_PROFILES).map(([key, profile]) => (
+                  <button
+                    key={key}
+                    onClick={() => switchClient(key)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                      selectedClient === key
+                        ? profile.accentClass
+                        : 'border border-ink-200 text-ink-500 hover:border-ink-400 hover:text-ink-700'
+                    }`}
+                  >
+                    {profile.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Analysis type pills */}
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                Analysis type <span className="normal-case font-normal text-ink-300">(pick one or more)</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {CLIENT_PROFILES[selectedClient].analyses.map((analysis) => {
+                  const active = selectedAnalyses.includes(analysis);
+                  return (
+                    <button
+                      key={analysis}
+                      onClick={() => toggleAnalysis(analysis)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        active
+                          ? 'border-violet-400 bg-violet-50 text-violet-700'
+                          : 'border-ink-200 text-ink-500 hover:border-violet-300 hover:text-violet-600'
+                      }`}
+                    >
+                      {active ? '✓ ' : ''}{analysis}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Free-text extra direction */}
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                Extra direction <span className="normal-case font-normal text-ink-300">(optional)</span>
+              </p>
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                rows={2}
+                placeholder="Any extra context — e.g. &quot;Campaign A used image, Campaign B used video&quot; or &quot;Week 1 was a test budget&quot;"
+                className="w-full resize-none rounded-xl border border-ink-200 px-4 py-3 text-sm text-ink-700 placeholder:text-ink-300 focus:border-violet-400 focus:outline-none"
+              />
+            </div>
           </div>
 
           <div className="rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
