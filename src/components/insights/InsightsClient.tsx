@@ -17,6 +17,15 @@ interface DataSummary {
   context: string;
 }
 
+function detectCurrency(rows: Record<string, string>[]): { symbol: string; code: string } {
+  const sample = rows.slice(0, 100).flatMap((r) => Object.values(r)).join(' ');
+  const cols = rows.length ? Object.keys(rows[0]).join(' ').toLowerCase() : '';
+  if (/£/.test(sample) || /\bgbp\b/.test(cols)) return { symbol: '£', code: 'GBP (£)' };
+  if (/\$/.test(sample) || /\busd\b/.test(cols)) return { symbol: '$', code: 'USD ($)' };
+  if (/€/.test(sample) || /\beur\b/.test(cols)) return { symbol: '€', code: 'EUR (€)' };
+  return { symbol: '€', code: 'EUR (€)' };
+}
+
 function buildContext(columns: string[], rows: Record<string, string>[]): DataSummary {
   const { mapped } = detectColumns(columns);
   const adRows = applyMapping(rows, mapped);
@@ -36,6 +45,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
     };
   }
 
+  const currency = detectCurrency(rows);
   const dates = adRows.map((r) => r.date).filter(Boolean).sort();
   const dateRange = dates.length
     ? `${dates[0]} to ${dates[dates.length - 1]}`
@@ -51,6 +61,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
 
   const lines: string[] = [
     'PAID MEDIA CAMPAIGN DATA',
+    `Currency: ${currency.code}`,
     `Date range: ${dateRange}`,
     `Total data rows: ${adRows.length.toLocaleString()}`,
     channels.length ? `Channels: ${channels.join(', ')}` : '',
@@ -176,7 +187,28 @@ export default function InsightsClient() {
   const [insightsText, setInsightsText] = useState('');
   const [error, setError] = useState('');
   const [guideOpen, setGuideOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(insightsText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for browsers that block clipboard without user gesture
+      const el = document.createElement('textarea');
+      el.value = insightsText;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
 
   function handleData(data: { columns: string[]; rows: Record<string, string>[] }) {
     const s = buildContext(data.columns, data.rows);
@@ -362,10 +394,14 @@ export default function InsightsClient() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => navigator.clipboard.writeText(insightsText)}
-                className="rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-50 transition"
+                onClick={copyText}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                  copied
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-ink-200 text-ink-500 hover:bg-ink-50'
+                }`}
               >
-                Copy text
+                {copied ? '✓ Copied' : 'Copy text'}
               </button>
               <button
                 onClick={reset}

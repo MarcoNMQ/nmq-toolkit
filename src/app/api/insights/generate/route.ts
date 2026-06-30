@@ -31,7 +31,8 @@ Rules:
 - Every point must reference a specific number from the data.
 - No generic statements like "performance is good" without a number attached.
 - Skip any section where the data is absent.
-- Write like a strategist briefing a client, not like a report generator.`;
+- Write like a strategist briefing a client, not like a report generator.
+- The data context includes a "Currency:" line. Use that exact currency symbol for all monetary values throughout your analysis — never substitute a different one.`;
 
 export const runtime = 'nodejs';
 

@@ -18,7 +18,7 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">Ad</h2>
         <button onClick={() => removeAd(campaignId, adId)} className="text-sm text-red-500 hover:underline">

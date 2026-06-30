@@ -27,7 +27,7 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
   const isBlank = !campaign.campaign_name && !campaign.campaign_objective && campaign.ads.length === 0;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
       <details className="rounded-md border border-ink-200">
         <summary className="cursor-pointer px-4 py-2 text-sm font-semibold text-ink-600">📥 Import from Briefing Sheet</summary>
         <div className="border-t border-ink-200 p-4">

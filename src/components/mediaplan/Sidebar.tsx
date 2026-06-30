@@ -94,7 +94,7 @@ export function Sidebar() {
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileSidebarOpen(false)} />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-y-auto border-r border-ink-100 bg-white transition-transform duration-200 md:relative md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-hidden border-r border-ink-100 bg-white transition-transform duration-200 md:relative md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
       <div className="border-b border-ink-100 p-4">
         <div className="mb-2 flex items-center justify-between">
