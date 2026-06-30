@@ -184,6 +184,7 @@ export default function InsightsClient() {
   const [step, setStep] = useState<Step>('upload');
   const [summary, setSummary] = useState<DataSummary | null>(null);
   const [deepMode, setDeepMode] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
   const [insightsText, setInsightsText] = useState('');
   const [error, setError] = useState('');
   const [guideOpen, setGuideOpen] = useState(true);
@@ -226,10 +227,14 @@ export default function InsightsClient() {
     abortRef.current = ctrl;
 
     try {
+      const contextWithPrompt = customPrompt.trim()
+        ? `${summary.context}\n\nSPECIFIC ANALYSIS REQUEST:\n${customPrompt.trim()}`
+        : summary.context;
+
       const res = await fetch('/api/insights/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: summary.context, deepMode }),
+        body: JSON.stringify({ context: contextWithPrompt, deepMode }),
         signal: ctrl.signal,
       });
 
@@ -260,6 +265,7 @@ export default function InsightsClient() {
     setStep('upload');
     setSummary(null);
     setInsightsText('');
+    setCustomPrompt('');
     setError('');
   }
 
@@ -312,6 +318,20 @@ export default function InsightsClient() {
           {error && (
             <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
+
+          <div className="mb-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-sm">
+            <label className="mb-1.5 block text-xs font-semibold text-ink-400 uppercase tracking-wider">
+              Focus (optional)
+            </label>
+            <textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              rows={3}
+              placeholder="Tell Claude what to focus on — e.g. &quot;Compare link clicks vs impressions across channels&quot; or &quot;Analyse A/B creative test between Campaign A and B&quot; or &quot;Focus on YouTube video completion rates&quot;"
+              className="w-full resize-none rounded-xl border border-ink-200 px-4 py-3 text-sm text-ink-700 placeholder:text-ink-300 focus:border-violet-400 focus:outline-none"
+            />
+            <p className="mt-1.5 text-[11px] text-ink-400">Leave empty for a general analysis across all available data.</p>
+          </div>
 
           <div className="rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
