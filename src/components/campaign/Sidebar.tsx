@@ -72,7 +72,7 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-hidden bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
       <div className="border-b border-ink-100 p-4">
         <div className="mb-3 flex items-center justify-between">
