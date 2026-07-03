@@ -25,13 +25,25 @@ function extractFromPostUrl(url: string): { storyId: string; videoId: string; cr
   }
 
   // Facebook video: facebook.com/{page}/videos/{id}
-  const fbVideoMatch = clean.match(new RegExp(`facebook\\.com/[^/]+/videos/(${SHORT_CODE})`));
+  const fbVideoMatch = clean.match(new RegExp(`facebook\\.com/[^/?#]+/videos/(${SHORT_CODE})`));
   if (fbVideoMatch) {
     return { storyId: fbVideoMatch[1], videoId: fbVideoMatch[1], creativeType: 'Video Page Post Ad' };
   }
 
+  // Facebook Reel: facebook.com/reel/{id}
+  const fbReelMatch = clean.match(new RegExp(`facebook\\.com/reel/(${SHORT_CODE})`));
+  if (fbReelMatch) {
+    return { storyId: fbReelMatch[1], videoId: fbReelMatch[1], creativeType: 'Video Page Post Ad' };
+  }
+
+  // Facebook Watch: facebook.com/watch/?v={id}
+  const fbWatchMatch = clean.match(/[?&]v=([A-Za-z0-9_-]+)/);
+  if (fbWatchMatch && clean.includes('facebook.com')) {
+    return { storyId: fbWatchMatch[1], videoId: fbWatchMatch[1], creativeType: 'Video Page Post Ad' };
+  }
+
   // Facebook post: facebook.com/{page}/posts/{id}
-  const fbPostMatch = clean.match(new RegExp(`facebook\\.com/[^/]+/posts/(${SHORT_CODE})`));
+  const fbPostMatch = clean.match(new RegExp(`facebook\\.com/[^/?#]+/posts/(${SHORT_CODE})`));
   if (fbPostMatch) {
     return { storyId: fbPostMatch[1], videoId: '', creativeType: 'Image Page Post Ad' };
   }
@@ -139,6 +151,7 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
               <p className="mt-1 text-xs text-sky-600">
                 Extracted — Story ID: <strong>{ad.story_id}</strong>
                 {ad.video_id && <> · Video ID: <strong>{ad.video_id}</strong></>}
+                {ad.story_id === ad.video_id && ad.video_id && <span className="text-sky-400"> (same value is correct for video posts)</span>}
               </p>
             )}
           </div>
