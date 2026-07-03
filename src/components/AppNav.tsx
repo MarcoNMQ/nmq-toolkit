@@ -67,7 +67,19 @@ export default function AppNav() {
         </div>
       </div>
 
-      {/* Right: workspace button */}
+      {/* Right: guide + workspace */}
+      <div className="flex items-center gap-2">
+      <Link
+        href="/guide"
+        title="Step-by-step guide for all tools"
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+          pathname === '/guide'
+            ? 'border-ink-900 bg-ink-900 text-white'
+            : 'border-ink-200 text-ink-500 hover:border-ink-400 hover:bg-ink-50'
+        }`}
+      >
+        Guide
+      </Link>
       <Link
         href="/workspace"
         title="Split view — open two tools side by side"
@@ -83,6 +95,7 @@ export default function AppNav() {
         </svg>
         Workspace
       </Link>
+      </div>
     </nav>
   );
 }

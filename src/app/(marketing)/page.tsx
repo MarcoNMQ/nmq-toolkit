@@ -189,7 +189,10 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-ink-100 bg-white px-8 py-5 text-center">
         <p className="text-xs text-ink-400">
-          © {new Date().getFullYear()} NMQ Digital · Internal use only
+          © {new Date().getFullYear()} NMQ Digital · Internal use only ·{' '}
+          <Link href="/guide" className="underline underline-offset-2 hover:text-ink-700 transition">
+            User Guide
+          </Link>
         </p>
       </footer>
     </div>
