@@ -76,6 +76,7 @@ export function newFbAd(): FbAd {
     link: '',
     link_description: '',
     display_link: '',
+    image_hash: '',
     image_file_name: '',
     creative_type: 'Page post ad',
     url_tags: '',

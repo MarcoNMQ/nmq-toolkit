@@ -109,7 +109,8 @@ export interface FbAd {
   link: string;
   link_description: string;
   display_link: string;
-  image_file_name: string;
+  image_hash: string;       // preferred: references an existing asset in Business Manager
+  image_file_name: string;  // alternative: only works when uploading a new image alongside the template
   creative_type: string;
   url_tags: string;
   cta: string;

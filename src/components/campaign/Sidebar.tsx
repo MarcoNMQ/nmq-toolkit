@@ -58,6 +58,10 @@ export function Sidebar() {
     return downloadExport('campaigns', platform === 'google' ? 'google_ads_campaigns.csv' : 'facebook_campaigns.xlsx');
   }
 
+  function handleFbAdsOnly() {
+    return downloadExport('fb_ads_only', 'facebook_ads_only.xlsx');
+  }
+
   const hasKeywords = platform === 'google' && googleCampaigns.some((c) => c.keywords.length > 0);
   const hasSitelinks = platform === 'google' && googleCampaigns.some((c) => c.sitelinks.length > 0);
 
@@ -198,8 +202,18 @@ export function Sidebar() {
           onClick={handleExport}
           className="w-full rounded-md border-2 border-brand-500 py-2 text-sm font-bold text-brand-600 transition hover:bg-brand-500 hover:text-white disabled:opacity-40"
         >
-          {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV' : 'Export Excel'}
+          {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV' : 'Export Excel (full)'}
         </button>
+        {platform === 'facebook' && (
+          <button
+            disabled={exporting || campaigns.length === 0}
+            onClick={handleFbAdsOnly}
+            className="mt-2 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
+            title="Exports only the ad rows — use this to add ads to an existing campaign without creating a duplicate campaign structure"
+          >
+            {exporting ? 'Exporting…' : 'Export Ads only ↗'}
+          </button>
+        )}
         {hasKeywords && (
           <button
             disabled={exporting}

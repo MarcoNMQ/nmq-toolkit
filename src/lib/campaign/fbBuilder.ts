@@ -88,12 +88,64 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
       row['Body'] = ad.body ?? '';
       row['Link Description'] = ad.link_description ?? '';
       row['Display Link'] = ad.display_link ?? '';
+      row['Image Hash'] = ad.image_hash ?? '';
       row['Image File Name'] = ad.image_file_name ?? '';
       row['Creative Type'] = ad.creative_type || 'Page post ad';
       row['URL Tags'] = ad.url_tags ?? '';
       row['Call to Action'] = ad.cta ?? '';
 
       ws.addRow(FB_HEADERS.map((h) => row[h]));
+    }
+  }
+
+  const arrayBuffer = await wb.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Ads-only export: same columns, same ad data, but all campaign/ad-set fields
+ * are blanked out (except Campaign Name and Ad Set Name as identifiers).
+ * Facebook then attaches the new ads to existing campaigns/ad sets by name
+ * instead of creating duplicate campaign structures.
+ */
+export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Ads Manager Template');
+  ws.addRow(FB_HEADERS);
+
+  // Columns to blank — everything except the identifier and ad-level fields
+  const AD_ONLY_KEEP = new Set([
+    'Campaign Name', 'Ad Set Name',
+    'Ad ID', 'Ad Status', 'Ad Name', 'Title', 'Body', 'Link Description',
+    'Display Link', 'Image Hash', 'Creative Type', 'URL Tags', 'Image File Name',
+    'Call to Action', 'Story ID', 'Link', 'URL Tags',
+    'Creative Optimization',
+    'Product 1 - Link', 'Product 1 - Name', 'Product 1 - Description', 'Product 1 - Image Hash',
+    'Product 2 - Link', 'Product 2 - Name', 'Product 2 - Description', 'Product 2 - Image Hash',
+    'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
+  ]);
+
+  for (const camp of campaigns) {
+    for (const ad of camp.ads ?? []) {
+      const row: Record<string, string> = {};
+      for (const h of FB_HEADERS) row[h] = '';
+
+      row['Campaign Name'] = camp.campaign_name ?? '';
+      row['Ad Set Name'] = camp.adset_name ?? '';
+      row['Link'] = ad.link ?? '';
+      row['Ad Status'] = ad.ad_status || 'PAUSED';
+      row['Ad Name'] = ad.ad_name ?? '';
+      row['Title'] = ad.title ?? '';
+      row['Body'] = ad.body ?? '';
+      row['Link Description'] = ad.link_description ?? '';
+      row['Display Link'] = ad.display_link ?? '';
+      row['Image Hash'] = ad.image_hash ?? '';
+      row['Image File Name'] = ad.image_file_name ?? '';
+      row['Creative Type'] = ad.creative_type || 'Page post ad';
+      row['URL Tags'] = ad.url_tags ?? '';
+      row['Call to Action'] = ad.cta ?? '';
+
+      ws.addRow(FB_HEADERS.map((h) => (AD_ONLY_KEEP.has(h) ? row[h] : '')));
     }
   }
 
@@ -122,7 +174,7 @@ export function validateFbCampaigns(campaigns: FbCampaign[]): string[] {
       const al = `${label} › Ad ${j + 1} (${ad.ad_name || '—'})`;
       if (!ad.ad_name) errors.push(`${al}: Ad Name is required.`);
       if (!ad.link) errors.push(`${al}: Destination URL is required.`);
-      if (!ad.image_file_name) errors.push(`${al}: Image File Name is required.`);
+      if (!ad.image_hash && !ad.image_file_name) errors.push(`${al}: Provide either an Image Hash (existing asset) or an Image File Name.`);
       if (!ad.body) errors.push(`${al}: Body (primary text) is required.`);
       if (ad.title && ad.title.length > 25) errors.push(`${al}: Title is ${ad.title.length} chars (max 25).`);
       if (ad.body && ad.body.length > 500) errors.push(`${al}: Body is ${ad.body.length} chars (max 500).`);

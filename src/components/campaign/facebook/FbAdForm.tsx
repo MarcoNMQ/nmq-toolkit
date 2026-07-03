@@ -41,9 +41,18 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
         <TextInput value={ad.link} onChange={(e) => patch({ link: e.target.value })} placeholder="https://shimanofishing.com/..." />
       </Field>
 
-      <Field label="Image file name" hint="Must match a file already uploaded to Ads Manager">
-        <TextInput value={ad.image_file_name} onChange={(e) => patch({ image_file_name: e.target.value })} />
-      </Field>
+      <div className="rounded-xl border border-ink-100 bg-ink-50 p-4 space-y-3">
+        <div>
+          <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-ink-500">Image asset</p>
+          <p className="text-[11px] text-ink-400">Fill one of the two fields below. Use <strong>Image Hash</strong> when the image already exists in Business Manager — Facebook strips original file names so the hash is the only reliable reference.</p>
+        </div>
+        <Field label="Image Hash" hint="Find this in Business Manager → Creative Hub or Ad Library → image details">
+          <TextInput value={ad.image_hash ?? ''} onChange={(e) => patch({ image_hash: e.target.value })} placeholder="e.g. a1b2c3d4e5f6..." />
+        </Field>
+        <Field label="Image File Name" hint="Only works when uploading a brand-new image alongside this template">
+          <TextInput value={ad.image_file_name} onChange={(e) => patch({ image_file_name: e.target.value })} placeholder="e.g. product_banner.jpg" />
+        </Field>
+      </div>
 
       <div className="flex flex-col gap-1">
         <Field label="Title">

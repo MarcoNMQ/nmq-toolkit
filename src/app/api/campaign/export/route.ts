@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildCsv, buildKeywordsCsv, buildSitelinksCsv } from '@/lib/campaign/builder';
-import { buildFbExcel } from '@/lib/campaign/fbBuilder';
+import { buildFbExcel, buildFbAdsOnlyExcel } from '@/lib/campaign/fbBuilder';
 import type { FbCampaign, GoogleCampaign } from '@/lib/campaign/types';
 
 export async function POST(req: NextRequest) {
@@ -35,11 +35,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (platform === 'facebook') {
-    const buffer = await buildFbExcel(campaigns as FbCampaign[]);
+    const isAdsOnly = exportType === 'fb_ads_only';
+    const buffer = isAdsOnly
+      ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[])
+      : await buildFbExcel(campaigns as FbCampaign[]);
+    const filename = isAdsOnly ? 'facebook_ads_only.xlsx' : 'facebook_campaigns.xlsx';
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="facebook_campaigns.xlsx"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
   }
