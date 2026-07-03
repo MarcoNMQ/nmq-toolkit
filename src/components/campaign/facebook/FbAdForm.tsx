@@ -6,35 +6,38 @@ import { FB_CREATIVE_TYPES, FB_CTAS, FB_STATUSES } from '@/lib/campaign/fbConsta
 import { CharCount, Field, Select, TextArea, TextInput } from '@/components/Field';
 import type { FbAd } from '@/lib/campaign/types';
 
+// Short code pattern: alphanumeric + hyphens/underscores (covers both numeric FB IDs and Instagram short codes like DalyNoDEzE7)
+const SHORT_CODE = '[A-Za-z0-9_-]+';
+
 function extractFromPostUrl(url: string): { storyId: string; videoId: string; creativeType: string } | null {
   const clean = url.trim();
 
-  // https://www.facebook.com/{page_id}/videos/{video_id}
-  const videoMatch = clean.match(/facebook\.com\/(\d+)\/videos\/(\d+)/);
-  if (videoMatch) {
-    return { storyId: videoMatch[2], videoId: videoMatch[2], creativeType: 'Video Page Post Ad' };
+  // Instagram Reel: instagram.com/reel/{code}
+  const igReelMatch = clean.match(new RegExp(`instagram\\.com/reel/(${SHORT_CODE})`));
+  if (igReelMatch) {
+    return { storyId: igReelMatch[1], videoId: igReelMatch[1], creativeType: 'Video Page Post Ad' };
   }
 
-  // https://www.facebook.com/{page_slug}/videos/{video_id}
-  const videoSlugMatch = clean.match(/facebook\.com\/[^/]+\/videos\/(\d+)/);
-  if (videoSlugMatch) {
-    return { storyId: videoSlugMatch[1], videoId: videoSlugMatch[1], creativeType: 'Video Page Post Ad' };
+  // Instagram post: instagram.com/p/{code}
+  const igPostMatch = clean.match(new RegExp(`instagram\\.com/p/(${SHORT_CODE})`));
+  if (igPostMatch) {
+    return { storyId: igPostMatch[1], videoId: igPostMatch[1], creativeType: 'Video Page Post Ad' };
   }
 
-  // https://www.facebook.com/{page_id}/posts/{post_id}
-  const postMatch = clean.match(/facebook\.com\/\d+\/posts\/(\d+)/);
-  if (postMatch) {
-    return { storyId: postMatch[1], videoId: '', creativeType: 'Image Page Post Ad' };
+  // Facebook video: facebook.com/{page}/videos/{id}
+  const fbVideoMatch = clean.match(new RegExp(`facebook\\.com/[^/]+/videos/(${SHORT_CODE})`));
+  if (fbVideoMatch) {
+    return { storyId: fbVideoMatch[1], videoId: fbVideoMatch[1], creativeType: 'Video Page Post Ad' };
   }
 
-  // https://www.facebook.com/{page_slug}/posts/{post_id}
-  const postSlugMatch = clean.match(/facebook\.com\/[^/]+\/posts\/(\d+)/);
-  if (postSlugMatch) {
-    return { storyId: postSlugMatch[1], videoId: '', creativeType: 'Image Page Post Ad' };
+  // Facebook post: facebook.com/{page}/posts/{id}
+  const fbPostMatch = clean.match(new RegExp(`facebook\\.com/[^/]+/posts/(${SHORT_CODE})`));
+  if (fbPostMatch) {
+    return { storyId: fbPostMatch[1], videoId: '', creativeType: 'Image Page Post Ad' };
   }
 
-  // https://www.facebook.com/permalink.php?story_fbid={id}&id={page_id}
-  const permalinkMatch = clean.match(/story_fbid=(\d+)/);
+  // Facebook permalink: facebook.com/permalink.php?story_fbid={id}
+  const permalinkMatch = clean.match(/story_fbid=([A-Za-z0-9_-]+)/);
   if (permalinkMatch) {
     return { storyId: permalinkMatch[1], videoId: '', creativeType: 'Image Page Post Ad' };
   }
@@ -118,7 +121,7 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
           <div>
             <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-sky-700">Existing post</p>
             <p className="text-[11px] text-sky-600">
-              Paste the Facebook post URL — the Story ID and Video ID are extracted automatically. Find the URL by going to your Page, clicking the post timestamp, and copying the address bar.
+              Paste the post URL from Instagram or Facebook — the Story ID and Video ID are extracted automatically. For Instagram: open the post/reel and copy the URL from the address bar.
             </p>
           </div>
 
@@ -128,7 +131,7 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
               <TextInput
                 value={postUrl}
                 onChange={(e) => handlePostUrl(e.target.value)}
-                placeholder="https://www.facebook.com/100067846809006/videos/24278042309642276"
+                placeholder="https://www.instagram.com/reel/DalyNoDEzE7/ or facebook.com/.../videos/..."
               />
             </Field>
             {urlError && <p className="mt-1 text-xs text-red-500">{urlError}</p>}
