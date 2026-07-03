@@ -86,12 +86,11 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
       row['Ad Name'] = ad.ad_name ?? '';
 
       if (ad.ad_type === 'existing_post') {
-        // Promote existing post — Story ID drives everything; no image/title/copy needed
-        row['Story ID'] = ad.story_id ? `s:${ad.story_id}` : '';
-        // Video ID only applies to video posts; if user explicitly set it use it,
-        // otherwise fall back to story_id when creative type is Video Page Post Ad
+        // Promote existing post — Story ID drives everything; no image/title/copy needed.
+        // Facebook exports use s:/v: prefixes but the import template expects the raw code.
+        row['Story ID'] = ad.story_id ?? '';
         const resolvedVideoId = ad.video_id || (ad.creative_type === 'Video Page Post Ad' ? ad.story_id : '');
-        row['Video ID'] = resolvedVideoId ? `v:${resolvedVideoId}` : '';
+        row['Video ID'] = resolvedVideoId ?? '';
         row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
         row['Body'] = ad.body ?? '';
         row['URL Tags'] = ad.url_tags ?? '';
@@ -150,9 +149,9 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
       row['Ad Name'] = ad.ad_name ?? '';
 
       if (ad.ad_type === 'existing_post') {
-        row['Story ID'] = ad.story_id ? `s:${ad.story_id}` : '';
+        row['Story ID'] = ad.story_id ?? '';
         const resolvedVideoId = ad.video_id || (ad.creative_type === 'Video Page Post Ad' ? ad.story_id : '');
-        row['Video ID'] = resolvedVideoId ? `v:${resolvedVideoId}` : '';
+        row['Video ID'] = resolvedVideoId ?? '';
         row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
         row['Body'] = ad.body ?? '';
         row['URL Tags'] = ad.url_tags ?? '';
