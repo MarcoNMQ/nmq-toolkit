@@ -114,6 +114,7 @@ export interface FbAd {
   image_file_name: string;  // alternative: only works when uploading a new image alongside the template
   story_id: string;         // for existing_post: the Story ID (Facebook prefixes with s: on export)
   video_id: string;         // for existing_post video posts: the Video ID (Facebook prefixes with v: on export)
+  post_url: string;         // UI-only: the raw post URL pasted by the user, not exported
   creative_type: string;
   url_tags: string;
   cta: string;

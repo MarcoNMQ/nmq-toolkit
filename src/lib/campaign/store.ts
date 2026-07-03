@@ -81,6 +81,7 @@ export function newFbAd(): FbAd {
     image_file_name: '',
     story_id: '',
     video_id: '',
+    post_url: '',
     creative_type: 'Video Page Post Ad',
     url_tags: '',
     cta: '',

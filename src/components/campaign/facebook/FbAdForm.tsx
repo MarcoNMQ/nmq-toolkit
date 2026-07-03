@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { FB_CREATIVE_TYPES, FB_CTAS, FB_STATUSES } from '@/lib/campaign/fbConstants';
 import { CharCount, Field, Select, TextArea, TextInput } from '@/components/Field';
@@ -63,29 +63,27 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
   const updateAd = useBuilderStore((s) => s.updateFbAd);
   const removeAd = useBuilderStore((s) => s.removeFbAd);
 
-  const [postUrl, setPostUrl] = useState('');
   const [urlError, setUrlError] = useState('');
 
-  // Reset the URL field when switching between ads so state doesn't bleed across
-  useEffect(() => {
-    setPostUrl('');
-    setUrlError('');
-  }, [adId]);
-
   if (!campaign || !ad) return null;
+
+  const postUrl = ad.post_url ?? '';
 
   function patch(p: Partial<FbAd>) {
     updateAd(campaignId, adId, p);
   }
 
   function handlePostUrl(url: string) {
-    setPostUrl(url);
     setUrlError('');
-    if (!url.trim()) return;
+    if (!url.trim()) {
+      patch({ post_url: '' });
+      return;
+    }
     const extracted = extractFromPostUrl(url);
     if (extracted) {
-      patch({ story_id: extracted.storyId, video_id: extracted.videoId, creative_type: extracted.creativeType });
+      patch({ post_url: url, story_id: extracted.storyId, video_id: extracted.videoId, creative_type: extracted.creativeType });
     } else {
+      patch({ post_url: url });
       setUrlError('URL not recognised. Paste the full post URL from your Facebook Page.');
     }
   }
