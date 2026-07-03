@@ -33,7 +33,7 @@ export function Sidebar() {
   const totalAds = campaigns.reduce((n, c) => n + c.ads.length, 0);
   const totalBudget = campaigns.reduce((n, c) => n + (Number(c.budget) || 0), 0);
 
-  async function downloadExport(exportType: 'campaigns' | 'keywords' | 'sitelinks', filename: string) {
+  async function downloadExport(exportType: 'campaigns' | 'keywords' | 'sitelinks' | 'fb_ads_only', filename: string) {
     setExporting(true);
     try {
       const res = await fetch('/api/campaign/export', {
