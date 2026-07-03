@@ -190,9 +190,6 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
               </Select>
             </Field>
           </div>
-          <Field label="URL tags (optional)">
-            <TextInput value={ad.url_tags} onChange={(e) => patch({ url_tags: e.target.value })} placeholder="utm_source=facebook" />
-          </Field>
         </div>
       ) : (
         <>

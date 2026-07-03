@@ -23,9 +23,7 @@ export const FB_CAMPAIGN_BID_STRATEGIES = [
 ];
 
 export const FB_ADSET_BID_STRATEGIES = [
-  'Highest volume or value',
   'Bid cap',
-  'Highest Value',
 ];
 
 export const FB_OPTIMIZATION_GOALS = [
@@ -134,7 +132,7 @@ export const FB_HEADERS = [
   'Advertiser (Taiwan)', 'Payer (Taiwan)',
   'Advertiser (financial ads in Australia)', 'Payer (financial ads in Australia)',
   'Advertiser (Singapore)', 'Payer (Singapore)',
-  'Minimum ROAS bid', 'Ad Set Minimum Spend Limit', 'Ad Set Maximum Spend Limit',
+  'Ad Set Minimum Spend Limit', 'Ad Set Maximum Spend Limit',
   'Advertiser (securities ads in India)', 'Payer (securities ads in India)',
   'Beneficiary (selected locations)', 'Payer (selected locations)',
   'Large Geo Areas', 'Excluded Large Geo Areas',

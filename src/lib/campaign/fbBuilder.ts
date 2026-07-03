@@ -88,12 +88,12 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
       if (ad.ad_type === 'existing_post') {
         // Promote existing post — Story ID drives everything; no image/title/copy needed.
         // Facebook exports use s:/v: prefixes but the import template expects the raw code.
+        // URL Tags must be blank — the URL is baked into the existing post.
         row['Story ID'] = ad.story_id ?? '';
         const resolvedVideoId = ad.video_id || (ad.creative_type === 'Video Page Post Ad' ? ad.story_id : '');
         row['Video ID'] = resolvedVideoId ?? '';
         row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
         row['Body'] = ad.body ?? '';
-        row['URL Tags'] = ad.url_tags ?? '';
       } else {
         row['Title'] = ad.title ?? '';
         row['Body'] = ad.body ?? '';
@@ -154,7 +154,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
         row['Video ID'] = resolvedVideoId ?? '';
         row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
         row['Body'] = ad.body ?? '';
-        row['URL Tags'] = ad.url_tags ?? '';
+        // URL Tags blank — baked into the existing post
       } else {
         row['Title'] = ad.title ?? '';
         row['Body'] = ad.body ?? '';
