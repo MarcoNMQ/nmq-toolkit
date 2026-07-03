@@ -104,6 +104,7 @@ export interface FbAd {
   id: string;
   ad_name: string;
   ad_status: string;
+  ad_type: 'new_creative' | 'existing_post';
   title: string;
   body: string;
   link: string;
@@ -111,6 +112,8 @@ export interface FbAd {
   display_link: string;
   image_hash: string;       // preferred: references an existing asset in Business Manager
   image_file_name: string;  // alternative: only works when uploading a new image alongside the template
+  story_id: string;         // for existing_post: the Story ID (Facebook prefixes with s: on export)
+  video_id: string;         // for existing_post video posts: the Video ID (Facebook prefixes with v: on export)
   creative_type: string;
   url_tags: string;
   cta: string;

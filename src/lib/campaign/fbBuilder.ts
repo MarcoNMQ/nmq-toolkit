@@ -84,15 +84,28 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
       // Ad level
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
-      row['Title'] = ad.title ?? '';
-      row['Body'] = ad.body ?? '';
-      row['Link Description'] = ad.link_description ?? '';
-      row['Display Link'] = ad.display_link ?? '';
-      row['Image Hash'] = ad.image_hash ?? '';
-      row['Image File Name'] = ad.image_file_name ?? '';
-      row['Creative Type'] = ad.creative_type || 'Page post ad';
-      row['URL Tags'] = ad.url_tags ?? '';
-      row['Call to Action'] = ad.cta ?? '';
+
+      if (ad.ad_type === 'existing_post') {
+        // Promote existing post — Story ID drives everything; no image/title/copy needed
+        row['Story ID'] = ad.story_id ? `s:${ad.story_id}` : '';
+        // Video ID only applies to video posts; if user explicitly set it use it,
+        // otherwise fall back to story_id when creative type is Video Page Post Ad
+        const resolvedVideoId = ad.video_id || (ad.creative_type === 'Video Page Post Ad' ? ad.story_id : '');
+        row['Video ID'] = resolvedVideoId ? `v:${resolvedVideoId}` : '';
+        row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
+        row['Body'] = ad.body ?? '';
+        row['URL Tags'] = ad.url_tags ?? '';
+      } else {
+        row['Title'] = ad.title ?? '';
+        row['Body'] = ad.body ?? '';
+        row['Link Description'] = ad.link_description ?? '';
+        row['Display Link'] = ad.display_link ?? '';
+        row['Image Hash'] = ad.image_hash ?? '';
+        row['Image File Name'] = ad.image_file_name ?? '';
+        row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
+        row['URL Tags'] = ad.url_tags ?? '';
+        row['Call to Action'] = ad.cta ?? '';
+      }
 
       ws.addRow(FB_HEADERS.map((h) => row[h]));
     }
@@ -118,7 +131,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
     'Campaign Name', 'Ad Set Name',
     'Ad ID', 'Ad Status', 'Ad Name', 'Title', 'Body', 'Link Description',
     'Display Link', 'Image Hash', 'Creative Type', 'URL Tags', 'Image File Name',
-    'Call to Action', 'Story ID', 'Link', 'URL Tags',
+    'Call to Action', 'Story ID', 'Video ID', 'Link', 'URL Tags',
     'Creative Optimization',
     'Product 1 - Link', 'Product 1 - Name', 'Product 1 - Description', 'Product 1 - Image Hash',
     'Product 2 - Link', 'Product 2 - Name', 'Product 2 - Description', 'Product 2 - Image Hash',
@@ -135,15 +148,25 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
       row['Link'] = ad.link ?? '';
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
-      row['Title'] = ad.title ?? '';
-      row['Body'] = ad.body ?? '';
-      row['Link Description'] = ad.link_description ?? '';
-      row['Display Link'] = ad.display_link ?? '';
-      row['Image Hash'] = ad.image_hash ?? '';
-      row['Image File Name'] = ad.image_file_name ?? '';
-      row['Creative Type'] = ad.creative_type || 'Page post ad';
-      row['URL Tags'] = ad.url_tags ?? '';
-      row['Call to Action'] = ad.cta ?? '';
+
+      if (ad.ad_type === 'existing_post') {
+        row['Story ID'] = ad.story_id ? `s:${ad.story_id}` : '';
+        const resolvedVideoId = ad.video_id || (ad.creative_type === 'Video Page Post Ad' ? ad.story_id : '');
+        row['Video ID'] = resolvedVideoId ? `v:${resolvedVideoId}` : '';
+        row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
+        row['Body'] = ad.body ?? '';
+        row['URL Tags'] = ad.url_tags ?? '';
+      } else {
+        row['Title'] = ad.title ?? '';
+        row['Body'] = ad.body ?? '';
+        row['Link Description'] = ad.link_description ?? '';
+        row['Display Link'] = ad.display_link ?? '';
+        row['Image Hash'] = ad.image_hash ?? '';
+        row['Image File Name'] = ad.image_file_name ?? '';
+        row['Creative Type'] = ad.creative_type || 'Video Page Post Ad';
+        row['URL Tags'] = ad.url_tags ?? '';
+        row['Call to Action'] = ad.cta ?? '';
+      }
 
       ws.addRow(FB_HEADERS.map((h) => (AD_ONLY_KEEP.has(h) ? row[h] : '')));
     }
@@ -173,11 +196,15 @@ export function validateFbCampaigns(campaigns: FbCampaign[]): string[] {
     (c.ads ?? []).forEach((ad, j) => {
       const al = `${label} › Ad ${j + 1} (${ad.ad_name || '—'})`;
       if (!ad.ad_name) errors.push(`${al}: Ad Name is required.`);
-      if (!ad.link) errors.push(`${al}: Destination URL is required.`);
-      if (!ad.image_hash && !ad.image_file_name) errors.push(`${al}: Provide either an Image Hash (existing asset) or an Image File Name.`);
-      if (!ad.body) errors.push(`${al}: Body (primary text) is required.`);
-      if (ad.title && ad.title.length > 25) errors.push(`${al}: Title is ${ad.title.length} chars (max 25).`);
-      if (ad.body && ad.body.length > 500) errors.push(`${al}: Body is ${ad.body.length} chars (max 500).`);
+      if (ad.ad_type === 'existing_post') {
+        if (!ad.story_id) errors.push(`${al}: Story ID is required when promoting an existing post.`);
+      } else {
+        if (!ad.link) errors.push(`${al}: Destination URL is required.`);
+        if (!ad.image_hash && !ad.image_file_name) errors.push(`${al}: Provide either an Image Hash (existing asset) or an Image File Name.`);
+        if (!ad.body) errors.push(`${al}: Body (primary text) is required.`);
+        if (ad.title && ad.title.length > 25) errors.push(`${al}: Title is ${ad.title.length} chars (max 25).`);
+        if (ad.body && ad.body.length > 500) errors.push(`${al}: Body is ${ad.body.length} chars (max 500).`);
+      }
     });
   });
 

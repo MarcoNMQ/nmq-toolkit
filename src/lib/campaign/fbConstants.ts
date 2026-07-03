@@ -61,7 +61,11 @@ export const FB_INSTAGRAM_POSITIONS = ['stream', 'story'];
 
 export const FB_STATUSES = ['PAUSED', 'ACTIVE'];
 
-export const FB_CREATIVE_TYPES = ['Page post ad', 'Standard'];
+export const FB_CREATIVE_TYPES = [
+  'Video Page Post Ad',
+  'Image Page Post Ad',
+  'Standard',
+];
 
 export const FB_CTAS = [
   'LEARN_MORE',
@@ -146,5 +150,5 @@ export const FB_HEADERS = [
   'Product 1 - Link', 'Product 1 - Name', 'Product 1 - Description', 'Product 1 - Image Hash',
   'Product 2 - Link', 'Product 2 - Name', 'Product 2 - Description', 'Product 2 - Image Hash',
   'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
-  'Call to Action', 'Story ID',
+  'Call to Action', 'Story ID', 'Video ID',
 ];

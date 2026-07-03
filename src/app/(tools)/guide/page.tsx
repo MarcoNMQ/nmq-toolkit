@@ -55,10 +55,14 @@ const SECTIONS: Section[] = [
           { text: 'Select Countries, Gender, Age range and Publisher/Device/Position targeting.' },
           { text: 'Click "Next: Add ad" to open the ad form.' },
           {
-            text: 'In the ad form, fill the Image Asset section. Use Image Hash for existing Business Manager assets (preferred) — find the hash in Business Manager → Media Library → image details.',
-            note: 'Facebook strips original file names and replaces them with numeric IDs, so Image File Name only works when you are uploading a brand-new image alongside the template.',
+            text: 'Choose the ad type at the top of the form: "New creative" (build from an image + copy) or "Promote existing post" (reference a post already on your Page by its Story ID).',
+            note: 'For Shimano and most video campaigns, use "Promote existing post". Facebook needs the numeric post ID — find it at the end of the post URL on your Page. The tool prefixes it with s: and v: automatically.',
           },
-          { text: 'Fill Title (max 25 chars), Body / primary text, Link, CTA and any URL tags.' },
+          {
+            text: 'For "New creative": fill the Image Asset section. Use Image Hash for existing Business Manager assets (preferred) — the full hash format is imageId:hashValue, e.g. 1056130167741584:504fcf9d72dd... Find it in Business Manager → Media Library.',
+            note: 'Facebook strips original file names, so Image File Name only works when you are uploading a brand-new image alongside the template.',
+          },
+          { text: 'For "New creative": fill Title (max 25 chars), Body / primary text, Link, CTA and any URL tags.' },
           { text: 'Export using one of two buttons in the sidebar footer:', },
           { text: '"Export Excel (full)" — use this for the first time you\'re setting up a campaign. Creates the full campaign + ad set + ad structure.' },
           { text: '"Export Ads only" — use this when the campaign already exists in Ads Manager and you just need to add new ads. Only exports ad rows so Facebook won\'t create a duplicate campaign.' },
@@ -71,7 +75,7 @@ const SECTIONS: Section[] = [
     ],
     tips: [
       'Don\'t open the Google CSV in Excel before uploading to Google Ads Editor — Excel converts the Logo asset ID to scientific notation. Upload directly from your Downloads folder.',
-      'If Facebook bulk upload shows a Campaign and Ad Set but no ads, the ad row failed validation. The most common cause is a missing or incorrect Image Hash / Image File Name.',
+      'If Facebook bulk upload creates a Campaign and Ad Set but no ads appear, the ad row failed silently. For "Promote existing post" mode, check that the Story ID is the plain numeric post ID with no prefix — the tool adds s: automatically. For "New creative" mode, check Image Hash or Image File Name.',
       'The "Export Ads only" file is for adding ads to an existing campaign — never use it for a brand-new setup.',
       'Each campaign in the sidebar tree has Duplicate (📋) and Delete (🗑) buttons that appear on hover.',
     ],

@@ -71,6 +71,7 @@ export function newFbAd(): FbAd {
     id: uid(),
     ad_name: '',
     ad_status: 'PAUSED',
+    ad_type: 'new_creative',
     title: '',
     body: '',
     link: '',
@@ -78,7 +79,9 @@ export function newFbAd(): FbAd {
     display_link: '',
     image_hash: '',
     image_file_name: '',
-    creative_type: 'Page post ad',
+    story_id: '',
+    video_id: '',
+    creative_type: 'Video Page Post Ad',
     url_tags: '',
     cta: '',
   };
