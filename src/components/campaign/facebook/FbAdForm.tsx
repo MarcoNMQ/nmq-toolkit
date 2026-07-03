@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { FB_CREATIVE_TYPES, FB_CTAS, FB_STATUSES } from '@/lib/campaign/fbConstants';
 import { CharCount, Field, Select, TextArea, TextInput } from '@/components/Field';
@@ -65,6 +65,12 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
 
   const [postUrl, setPostUrl] = useState('');
   const [urlError, setUrlError] = useState('');
+
+  // Reset the URL field when switching between ads so state doesn't bleed across
+  useEffect(() => {
+    setPostUrl('');
+    setUrlError('');
+  }, [adId]);
 
   if (!campaign || !ad) return null;
 
