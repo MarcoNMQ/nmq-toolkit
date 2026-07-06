@@ -152,10 +152,16 @@ export async function fetchSheetTabs(sheetId: string): Promise<[string, string][
   return [];
 }
 
+// Normalise to lowercase with all separators (spaces, underscores, hyphens) removed.
+// "Key_Product_code" and "Key Product Code" both normalise to "keyproductcode",
+// which is why sheets that use spaces instead of underscores still auto-detect.
+const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_-]+/g, '');
+
 function findCol(headers: string[], name: string): string | null {
-  const exact = headers.find((k) => k.trim().toLowerCase() === name.toLowerCase());
+  const normName = norm(name);
+  const exact = headers.find((k) => norm(k) === normName);
   if (exact) return exact;
-  return headers.find((k) => k.trim().toLowerCase().includes(name.toLowerCase())) ?? null;
+  return headers.find((k) => norm(k).includes(normName)) ?? null;
 }
 
 /** Find which row in the sheet looks like the header row (first 10 rows scanned). */

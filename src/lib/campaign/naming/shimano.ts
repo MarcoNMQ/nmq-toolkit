@@ -92,6 +92,9 @@ export const shimanoBriefingCampaignFormula: NamingFormula<BriefingRow> = {
   source: 'briefing-import',
   resolve: (r) => {
     const ah = r.key_product === '_' ? '' : r.key_product;
+    // Omit country_code if it duplicates market_code (e.g. SEU rows that carry
+    // 'SEU' in the Country_Code column — the market segment already covers it)
+    const countrySegment = r.country_code && r.country_code !== r.market_code ? r.country_code : '';
     return [
       r.channel_code,
       r.perf_code,
@@ -99,7 +102,7 @@ export const shimanoBriefingCampaignFormula: NamingFormula<BriefingRow> = {
       r.subcategory,
       r.product,
       r.market_code,
-      r.country_code,
+      countrySegment,
       fmtNameDate(r.start_date),
       fmtNameDate(r.end_date),
       ah === 'KC' ? 'KC' : '',
@@ -113,6 +116,7 @@ export const shimanoBriefingAdGroupFormula: NamingFormula<BriefingRow> = {
   source: 'briefing-import',
   resolve: (r) => {
     const ah = r.key_product === '_' ? '' : r.key_product;
+    const countrySegment = r.country_code && r.country_code !== r.market_code ? r.country_code : '';
     return [
       r.channel_code,
       r.perf_code,
@@ -121,7 +125,7 @@ export const shimanoBriefingAdGroupFormula: NamingFormula<BriefingRow> = {
       r.product,
       r.market_code,
       ah, // '' or 'KC' — sits here, not appended at the end
-      r.country_code,
+      countrySegment,
       fmtNameDate(r.start_date),
       fmtNameDate(r.end_date),
     ];
