@@ -53,7 +53,7 @@ export const CSV_HEADERS = [
   'Campaign Status', 'Labels',
   'Ad Group', 'Ad Group Status',
   'Max CPC', 'Max CPM', 'Target CPV', 'Target CPM',
-  'Location',
+  'Location', 'Location ID',
   'Ad type', 'Ad Name', 'Video ID 1',
   'Headline 1', 'Headline 2', 'Headline 3', 'Headline 4', 'Headline 5',
   'Headline 6', 'Headline 7', 'Headline 8', 'Headline 9', 'Headline 10',
@@ -399,6 +399,36 @@ export const COUNTRY_MAP: Record<string, string> = {
   NO: 'Norway',
   FI: 'Finland',
   DK: 'Denmark',
+};
+
+// Google Ads geo-target Criteria IDs (Target Type = Country), sourced from
+// developers.google.com/google-ads/api/data/geotargets
+// (geotargets-2026-06-15.csv). Populating these lets Editor resolve locations
+// directly instead of flagging every row as "Location need resolve".
+export const COUNTRY_GEOTARGET_ID: Record<string, string> = {
+  UK: '2826',
+  NL: '2528',
+  BE: '2056',
+  DE: '2276',
+  GER: '2276',
+  FR: '2250',
+  SE: '2752',
+  PL: '2616',
+  IT: '2380',
+  ES: '2724',
+  PT: '2620',
+  HU: '2348',
+  CZ: '2203',
+  RO: '2642',
+  ROM: '2642',
+  LIT: '2440',
+  SLOW: '2703',
+  SLOV: '2705',
+  AUS: '2040',
+  CRO: '2191',
+  NO: '2578',
+  FI: '2246',
+  DK: '2208',
 };
 
 // ── Code lookup (for name generation) ─────────────────────────────────────────

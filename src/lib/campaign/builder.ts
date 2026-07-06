@@ -3,7 +3,7 @@
 import {
   CSV_HEADERS, NETWORKS, EU_POL, BIZ, LOGO,
   CAMP_TYPE, LANGUAGES, BUDGET_TYPE, CAMP_STATUS,
-  COUNTRY_MAP, MONTH_CODES, CTAS,
+  COUNTRY_MAP, COUNTRY_GEOTARGET_ID, MONTH_CODES, CTAS,
 } from './constants';
 import { generateName } from './naming/generateName';
 import { getConventionForClient } from './naming/templates';
@@ -86,6 +86,7 @@ function buildLocationRows(c: GoogleCampaign): CsvRow[] {
       row['Ad Group'] = c.adset_name;
     }
     row['Location'] = country;
+    row['Location ID'] = COUNTRY_GEOTARGET_ID[code] ?? '';
     rows.push(row);
   }
   return rows;
