@@ -69,6 +69,39 @@ export function Sidebar() {
 
   const campaigns = platform === 'google' ? googleCampaigns : fbCampaigns;
 
+  // Compute which campaign IDs and ad IDs have validation problems so we can
+  // show inline error dots without re-parsing the error message strings.
+  const { errorCampaignIds, errorAdIds } = useMemo(() => {
+    const errorCampaignIds = new Set<string>();
+    const errorAdIds = new Set<string>();
+    if (platform !== 'google') return { errorCampaignIds, errorAdIds };
+
+    for (const c of googleCampaigns) {
+      const isSearch = c.channel === 'Search';
+      if (!c.end_date || !c.countries?.length || !c.ads?.length) {
+        errorCampaignIds.add(c.id);
+      }
+      for (const ad of c.ads ?? []) {
+        const a = ad as unknown as Record<string, string>;
+        let adHasError = false;
+        if (!ad.final_url || !/^https?:\/\//i.test(ad.final_url)) adHasError = true;
+        if (!isSearch) {
+          const hasLongHeadline = [1,2,3,4,5].some((k) => a[`long_headline_${k}`]);
+          if (!hasLongHeadline) adHasError = true;
+        } else {
+          const headlineCount = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].filter((k) => a[`headline_${k}`]).length;
+          const descCount = [1,2,3,4].filter((k) => a[`description_${k}`]).length;
+          if (headlineCount < 3 || descCount < 2) adHasError = true;
+        }
+        if (adHasError) {
+          errorAdIds.add(ad.id);
+          errorCampaignIds.add(c.id);
+        }
+      }
+    }
+    return { errorCampaignIds, errorAdIds };
+  }, [platform, googleCampaigns]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, AnyCampaign[]>();
     for (const c of campaigns) {
@@ -189,16 +222,22 @@ export function Sidebar() {
             return (
               <div key={market} className="mb-1">
                 {/* Market group header */}
-                <button
-                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:bg-ink-50"
-                  onClick={() => toggleMarket(market)}
-                >
-                  <span className="text-[11px] text-ink-400">{isMarketOpen ? '▾' : '▸'}</span>
-                  <span className="flex-1 text-xs font-extrabold uppercase tracking-widest text-ink-700">{market}</span>
-                  <span className="shrink-0 rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">
-                    {group.length}
-                  </span>
-                </button>
+                {(() => {
+                  const marketHasErrors = group.some((c) => errorCampaignIds.has(c.id));
+                  return (
+                    <button
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:bg-ink-50"
+                      onClick={() => toggleMarket(market)}
+                    >
+                      <span className="text-[11px] text-ink-400">{isMarketOpen ? '▾' : '▸'}</span>
+                      <span className="flex-1 text-xs font-extrabold uppercase tracking-widest text-ink-700">{market}</span>
+                      {marketHasErrors && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" title="One or more campaigns have validation issues" />}
+                      <span className="shrink-0 rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">
+                        {group.length}
+                      </span>
+                    </button>
+                  );
+                })()}
 
                 {/* Campaigns under this market */}
                 {isMarketOpen && (
@@ -206,6 +245,8 @@ export function Sidebar() {
                     {group.map((c) => {
                       const isOpen = expanded[c.id] ?? true;
                       const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
+                      const campHasError = errorCampaignIds.has(c.id);
+                      const adGroupHasError = c.ads.some((ad) => errorAdIds.has(ad.id));
                       return (
                         <div key={c.id} className="mb-0.5">
                           <div
@@ -222,6 +263,9 @@ export function Sidebar() {
                             >
                               {c.campaign_name || '(unnamed campaign)'}
                             </button>
+                            {campHasError && (
+                              <span className="shrink-0 h-2 w-2 rounded-full bg-red-500 opacity-100 group-hover:opacity-0" title="Has validation issues" />
+                            )}
                             <button
                               className="shrink-0 opacity-0 group-hover:opacity-100"
                               title="Duplicate"
@@ -245,22 +289,27 @@ export function Sidebar() {
                                 onClick={() => setSelected({ type: 'adgroup', campaignId: c.id })}
                               >
                                 <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-mint-100 text-mint-700">AG</span>
-                                <span className="min-w-0 truncate" title={c.adset_name}>
+                                <span className="min-w-0 flex-1 truncate" title={c.adset_name}>
                                   {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
                                 </span>
+                                {adGroupHasError && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" title="One or more ads have issues" />}
                               </button>
-                              {c.ads.map((ad) => (
-                                <button
-                                  key={ad.id}
-                                  className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
-                                  onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
-                                >
-                                  <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
-                                  <span className="min-w-0 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
-                                    {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
-                                  </span>
-                                </button>
-                              ))}
+                              {c.ads.map((ad) => {
+                                const adHasError = errorAdIds.has(ad.id);
+                                return (
+                                  <button
+                                    key={ad.id}
+                                    className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
+                                    onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                                  >
+                                    <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
+                                    <span className="min-w-0 flex-1 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
+                                      {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
+                                    </span>
+                                    {adHasError && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" title="Has validation issues" />}
+                                  </button>
+                                );
+                              })}
                               <button
                                 className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-bold text-brand-600 hover:bg-ink-50"
                                 onClick={() => setSelected({ type: 'new_ad', campaignId: c.id })}
