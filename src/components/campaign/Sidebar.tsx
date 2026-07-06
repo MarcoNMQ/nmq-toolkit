@@ -36,6 +36,8 @@ export function Sidebar() {
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [collapsedMarkets, setCollapsedMarkets] = useState<Set<string>>(new Set());
   const [openErrorId, setOpenErrorId] = useState<string | null>(null);
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [selectedExportMarkets, setSelectedExportMarkets] = useState<Set<string>>(new Set());
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -135,13 +137,37 @@ export function Sidebar() {
   const totalAds = campaigns.reduce((n, c) => n + c.ads.length, 0);
   const totalBudget = campaigns.reduce((n, c) => n + (Number(c.budget) || 0), 0);
 
-  async function downloadExport(exportType: 'campaigns' | 'keywords' | 'sitelinks' | 'fb_ads_only', filename: string) {
+  const allMarketKeys = useMemo(() => grouped.map(([key]) => key), [grouped]);
+
+  function openExportPanel() {
+    setSelectedExportMarkets(new Set(allMarketKeys));
+    setExportPanelOpen(true);
+  }
+
+  function toggleExportMarket(key: string) {
+    setSelectedExportMarkets((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  function filteredCampaigns() {
+    if (selectedExportMarkets.size === allMarketKeys.length) return campaigns;
+    return campaigns.filter((c) => selectedExportMarkets.has(getMarket(c)));
+  }
+
+  async function downloadExport(
+    exportType: 'campaigns' | 'keywords' | 'sitelinks' | 'fb_ads_only',
+    filename: string,
+    subset: AnyCampaign[] = campaigns,
+  ) {
     setExporting(true);
     try {
       const res = await fetch('/api/campaign/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, campaigns, exportType }),
+        body: JSON.stringify({ platform, campaigns: subset, exportType }),
       });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
@@ -157,11 +183,15 @@ export function Sidebar() {
   }
 
   function handleExport() {
-    return downloadExport('campaigns', platform === 'google' ? 'google_ads_campaigns.csv' : 'facebook_campaigns.xlsx');
+    const subset = filteredCampaigns();
+    downloadExport('campaigns', platform === 'google' ? 'google_ads_campaigns.csv' : 'facebook_campaigns.xlsx', subset);
+    setExportPanelOpen(false);
   }
 
   function handleFbAdsOnly() {
-    return downloadExport('fb_ads_only', 'facebook_ads_only.xlsx');
+    const subset = filteredCampaigns();
+    downloadExport('fb_ads_only', 'facebook_ads_only.xlsx', subset);
+    setExportPanelOpen(false);
   }
 
   const hasKeywords = platform === 'google' && googleCampaigns.some((c) => c.keywords.length > 0);
@@ -392,23 +422,77 @@ export function Sidebar() {
 
         {/* Export + clear */}
         <div className="shrink-0 border-t border-ink-100 p-3">
+          {/* Market picker — shown when export panel is open */}
+          {exportPanelOpen && campaigns.length > 0 && (
+            <div className="mb-3 rounded-md border border-ink-200 bg-ink-50 p-2">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-500">Select markets to export</p>
+              {/* Select all / none */}
+              <label className="mb-1.5 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-ink-100">
+                <input
+                  type="checkbox"
+                  className="accent-brand-500"
+                  checked={selectedExportMarkets.size === allMarketKeys.length}
+                  onChange={() => {
+                    if (selectedExportMarkets.size === allMarketKeys.length) {
+                      setSelectedExportMarkets(new Set());
+                    } else {
+                      setSelectedExportMarkets(new Set(allMarketKeys));
+                    }
+                  }}
+                />
+                <span className="text-xs font-bold text-ink-700">All markets</span>
+                <span className="ml-auto text-[10px] text-ink-400">{campaigns.length} campaigns</span>
+              </label>
+              <div className="my-1 border-t border-ink-200" />
+              <div className="max-h-40 overflow-y-auto">
+                {grouped.map(([key, group]) => (
+                  <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-ink-100">
+                    <input
+                      type="checkbox"
+                      className="accent-brand-500"
+                      checked={selectedExportMarkets.has(key)}
+                      onChange={() => toggleExportMarket(key)}
+                    />
+                    <span className="flex-1 text-xs font-semibold text-ink-700">{key}</span>
+                    <span className="text-[10px] text-ink-400">{group.length}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  disabled={exporting || selectedExportMarkets.size === 0}
+                  onClick={handleExport}
+                  className="flex-1 rounded-md bg-brand-500 py-1.5 text-xs font-bold text-white transition hover:bg-brand-600 disabled:opacity-40"
+                >
+                  {exporting ? 'Exporting…' : platform === 'google' ? 'Download CSV' : 'Download Excel'}
+                </button>
+                <button
+                  onClick={() => setExportPanelOpen(false)}
+                  className="rounded-md border border-ink-200 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:bg-ink-100"
+                >
+                  Cancel
+                </button>
+              </div>
+              {platform === 'facebook' && (
+                <button
+                  disabled={exporting || selectedExportMarkets.size === 0}
+                  onClick={handleFbAdsOnly}
+                  className="mt-1.5 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
+                >
+                  {exporting ? 'Exporting…' : 'Download Ads only ↗'}
+                </button>
+              )}
+            </div>
+          )}
+
           <button
             disabled={exporting || campaigns.length === 0}
-            onClick={handleExport}
+            onClick={() => exportPanelOpen ? setExportPanelOpen(false) : openExportPanel()}
             className="w-full rounded-md border-2 border-brand-500 py-2 text-sm font-bold text-brand-600 transition hover:bg-brand-500 hover:text-white disabled:opacity-40"
           >
-            {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV' : 'Export Excel (full)'}
+            {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV ▾' : 'Export Excel ▾'}
           </button>
-          {platform === 'facebook' && (
-            <button
-              disabled={exporting || campaigns.length === 0}
-              onClick={handleFbAdsOnly}
-              className="mt-2 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
-              title="Exports only the ad rows — use this to add ads to an existing campaign without creating a duplicate campaign structure"
-            >
-              {exporting ? 'Exporting…' : 'Export Ads only ↗'}
-            </button>
-          )}
+
           {hasKeywords && (
             <button
               disabled={exporting}
