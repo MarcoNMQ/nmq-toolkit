@@ -35,6 +35,7 @@ export function Sidebar() {
   const [exporting, setExporting] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [collapsedMarkets, setCollapsedMarkets] = useState<Set<string>>(new Set());
+  const [openErrorId, setOpenErrorId] = useState<string | null>(null);
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -69,37 +70,47 @@ export function Sidebar() {
 
   const campaigns = platform === 'google' ? googleCampaigns : fbCampaigns;
 
-  // Compute which campaign IDs and ad IDs have validation problems so we can
-  // show inline error dots without re-parsing the error message strings.
-  const { errorCampaignIds, errorAdIds } = useMemo(() => {
+  // Compute per-item error messages so each row can show its own issue list.
+  const { campaignErrors, adErrors, errorCampaignIds, errorAdIds } = useMemo(() => {
+    const campaignErrors = new Map<string, string[]>();
+    const adErrors = new Map<string, string[]>();
     const errorCampaignIds = new Set<string>();
     const errorAdIds = new Set<string>();
-    if (platform !== 'google') return { errorCampaignIds, errorAdIds };
+    if (platform !== 'google') return { campaignErrors, adErrors, errorCampaignIds, errorAdIds };
 
     for (const c of googleCampaigns) {
       const isSearch = c.channel === 'Search';
-      if (!c.end_date || !c.countries?.length || !c.ads?.length) {
-        errorCampaignIds.add(c.id);
-      }
+      const cErrs: string[] = [];
+      if (!c.end_date) cErrs.push('End date is missing');
+      if (!c.countries?.length) cErrs.push('No countries selected');
+      if (!c.ads?.length) cErrs.push('No ads added yet');
+      if (cErrs.length) { campaignErrors.set(c.id, cErrs); errorCampaignIds.add(c.id); }
+
       for (const ad of c.ads ?? []) {
         const a = ad as unknown as Record<string, string>;
-        let adHasError = false;
-        if (!ad.final_url || !/^https?:\/\//i.test(ad.final_url)) adHasError = true;
+        const aErrs: string[] = [];
+        if (!ad.final_url) {
+          aErrs.push('Final URL is required');
+        } else if (!/^https?:\/\//i.test(ad.final_url)) {
+          aErrs.push(`Final URL must start with https:// (got "${ad.final_url.slice(0, 35)}")`);
+        }
         if (!isSearch) {
           const hasLongHeadline = [1,2,3,4,5].some((k) => a[`long_headline_${k}`]);
-          if (!hasLongHeadline) adHasError = true;
+          if (!hasLongHeadline) aErrs.push('At least one Long Headline is required');
         } else {
-          const headlineCount = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].filter((k) => a[`headline_${k}`]).length;
-          const descCount = [1,2,3,4].filter((k) => a[`description_${k}`]).length;
-          if (headlineCount < 3 || descCount < 2) adHasError = true;
+          const hCount = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].filter((k) => a[`headline_${k}`]).length;
+          const dCount = [1,2,3,4].filter((k) => a[`description_${k}`]).length;
+          if (hCount < 3) aErrs.push(`Only ${hCount} headline${hCount === 1 ? '' : 's'} — need at least 3`);
+          if (dCount < 2) aErrs.push(`Only ${dCount} description${dCount === 1 ? '' : 's'} — need at least 2`);
         }
-        if (adHasError) {
+        if (aErrs.length) {
+          adErrors.set(ad.id, aErrs);
           errorAdIds.add(ad.id);
           errorCampaignIds.add(c.id);
         }
       }
     }
-    return { errorCampaignIds, errorAdIds };
+    return { campaignErrors, adErrors, errorCampaignIds, errorAdIds };
   }, [platform, googleCampaigns]);
 
   const grouped = useMemo(() => {
@@ -247,6 +258,7 @@ export function Sidebar() {
                       const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
                       const campHasError = errorCampaignIds.has(c.id);
                       const adGroupHasError = c.ads.some((ad) => errorAdIds.has(ad.id));
+                      const campOwnErrors = campaignErrors.get(c.id) ?? [];
                       return (
                         <div key={c.id} className="mb-0.5">
                           <div
@@ -264,7 +276,13 @@ export function Sidebar() {
                               {c.campaign_name || '(unnamed campaign)'}
                             </button>
                             {campHasError && (
-                              <span className="shrink-0 h-2 w-2 rounded-full bg-red-500 opacity-100 group-hover:opacity-0" title="Has validation issues" />
+                              <button
+                                className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white transition hover:bg-red-600 group-hover:opacity-100"
+                                title="Click to see issues"
+                                onClick={(e) => { e.stopPropagation(); setOpenErrorId(openErrorId === c.id ? null : c.id); }}
+                              >
+                                !
+                              </button>
                             )}
                             <button
                               className="shrink-0 opacity-0 group-hover:opacity-100"
@@ -282,6 +300,14 @@ export function Sidebar() {
                             </button>
                           </div>
 
+                          {openErrorId === c.id && campOwnErrors.length > 0 && (
+                            <div className="mx-1 mb-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                              {campOwnErrors.map((e, i) => (
+                                <p key={i} className="text-[11px] text-red-700">• {e}</p>
+                              ))}
+                            </div>
+                          )}
+
                           {isOpen && (
                             <div className="ml-5 border-l-2 border-ink-100 pl-2">
                               <button
@@ -292,22 +318,41 @@ export function Sidebar() {
                                 <span className="min-w-0 flex-1 truncate" title={c.adset_name}>
                                   {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
                                 </span>
-                                {adGroupHasError && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" title="One or more ads have issues" />}
+                                {adGroupHasError && (
+                                  <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">!</span>
+                                )}
                               </button>
                               {c.ads.map((ad) => {
                                 const adHasError = errorAdIds.has(ad.id);
+                                const adOwnErrors = adErrors.get(ad.id) ?? [];
                                 return (
-                                  <button
-                                    key={ad.id}
-                                    className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
-                                    onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
-                                  >
-                                    <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
-                                    <span className="min-w-0 flex-1 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
-                                      {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
-                                    </span>
-                                    {adHasError && <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" title="Has validation issues" />}
-                                  </button>
+                                  <div key={ad.id}>
+                                    <button
+                                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
+                                      onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                                    >
+                                      <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
+                                      <span className="min-w-0 flex-1 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
+                                        {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
+                                      </span>
+                                      {adHasError && (
+                                        <button
+                                          className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white transition hover:bg-red-600"
+                                          title="Click to see issues"
+                                          onClick={(e) => { e.stopPropagation(); setOpenErrorId(openErrorId === ad.id ? null : ad.id); }}
+                                        >
+                                          !
+                                        </button>
+                                      )}
+                                    </button>
+                                    {openErrorId === ad.id && adOwnErrors.length > 0 && (
+                                      <div className="mx-1 mb-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                                        {adOwnErrors.map((e, i) => (
+                                          <p key={i} className="text-[11px] text-red-700">• {e}</p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 );
                               })}
                               <button
