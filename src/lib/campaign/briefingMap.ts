@@ -49,6 +49,7 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
     bid_strategy: r.perf_code === 'TRF' ? 'Maximize clicks' : (BID_STRATEGIES[0] ?? ''),
     campaign_name: campaignName,
     adset_name: adsetName,
+    name_locked: true,
   };
 }
 

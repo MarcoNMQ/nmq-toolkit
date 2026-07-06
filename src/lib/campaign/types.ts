@@ -101,6 +101,10 @@ export interface GoogleCampaign {
   audience_segments?: string;
   audience_keywords?: string;
   placement_notes?: string;
+  // Set by the briefing importer to prevent the form's auto-name effect from
+  // clobbering the import-generated names on first render. Cleared automatically
+  // by the effect on the next naming-field change.
+  name_locked?: boolean;
 }
 
 // Types for the Facebook/Instagram campaign shape.

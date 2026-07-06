@@ -26,9 +26,17 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
   const updateGoogleSitelink = useBuilderStore((s) => s.updateGoogleSitelink);
   const removeGoogleSitelink = useBuilderStore((s) => s.removeGoogleSitelink);
 
-  // Keep computed names in sync whenever the inputs that feed them change
+  // Keep computed names in sync whenever the inputs that feed them change.
+  // Skips on the first fire after a briefing import (name_locked = true) —
+  // the importer sets names via a different formula and we don't want to
+  // clobber them. Clearing the lock here means the next user-driven field
+  // change will re-enable auto-naming normally.
   useEffect(() => {
     if (!campaign) return;
+    if (campaign.name_locked) {
+      update(campaignId, { name_locked: false });
+      return;
+    }
     const name = generateCampaignName(campaign);
     const adsetName = generateAdsetName(campaign);
     if (name !== campaign.campaign_name || adsetName !== campaign.adset_name) {
