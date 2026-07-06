@@ -6,9 +6,23 @@ import { mapBriefingRowToFbCampaign, mapBriefingRowToGoogleCampaign } from '@/li
 import {
   BRIEFING_FIELDS, DEFAULT_CHANNEL_CODES, buildRowsFromMap, splitAssetLinks, type BriefingRow, type ColumnMap,
 } from '@/lib/campaign/briefing';
+import { qcBriefingRows, type RowQcResult } from '@/lib/campaign/briefingQc';
 import { FB_CTAS } from '@/lib/campaign/fbConstants';
 import type { Platform } from '@/lib/campaign/types';
 import { TextInput } from '@/components/Field';
+
+// Best-effort mapping of non-URL CTA text (e.g. "Watch & Subscribe") to a real
+// Google Ads CTA option — used when the sheet's CTA column holds label text
+// rather than a URL. No mapping → '' (caller decides whether to apply).
+function guessCta(text: string): string {
+  const lower = (text ?? '').toLowerCase();
+  if (lower.includes('subscribe')) return 'Subscribe';
+  if (lower.includes('watch')) return 'Watch now';
+  if (lower.includes('learn')) return 'Learn more';
+  if (lower.includes('shop')) return 'Shop now';
+  if (lower.includes('sign up')) return 'Sign up';
+  return '';
+}
 
 export function BriefingImportPanel({ platform, onDone }: { platform: Platform; onDone: (lastCampaignId: string) => void }) {
   const updateGoogleCampaign = useBuilderStore((s) => s.updateGoogleCampaign);
@@ -33,6 +47,10 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   const [importing, setImporting] = useState(false);
   const [urlWarning, setUrlWarning] = useState<string | null>(null);
 
+  // QC state — computed once after rows are fetched, cleared on each new fetch
+  const [qcResults, setQcResults] = useState<RowQcResult[]>([]);
+  const [qcExpanded, setQcExpanded] = useState<Set<number>>(new Set());
+
   // Raw column data kept around so the user can manually remap columns if
   // auto-detection doesn't match the sheet (e.g. a non-Shimano briefing).
   const [headers, setHeaders] = useState<string[]>([]);
@@ -40,6 +58,22 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   const [manualMode, setManualMode] = useState(false);
   const [manualMap, setManualMap] = useState<ColumnMap>({});
   const [skipChannelFilter, setSkipChannelFilter] = useState(false);
+
+  // Set rows + run QC in one step, resetting related UI state
+  function applyRows(newRows: BriefingRow[]) {
+    setRows(newRows);
+    setSelectedIdxs(new Set());
+    setQcResults(qcBriefingRows(newRows));
+    setQcExpanded(new Set());
+  }
+
+  function toggleQcRow(i: number) {
+    setQcExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  }
 
   async function handleUrlBlur() {
     if (!url) return;
@@ -71,8 +105,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
         setError('No matching rows found on this tab.');
         setDebug(data.debug);
       } else {
-        setRows(data.rows);
-        setSelectedIdxs(new Set());
+        applyRows(data.rows);
       }
     } catch (e) {
       setError(String(e));
@@ -100,8 +133,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
         setError('No matching rows found across all tabs.');
         setDebug(data.debug);
       } else {
-        setRows(data.rows);
-        setSelectedIdxs(new Set());
+        applyRows(data.rows);
       }
     } catch (e) {
       setError(String(e));
@@ -128,8 +160,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
         setError('No matching rows found in this file.');
         setDebug(data.debug);
       } else {
-        setRows(data.rows);
-        setSelectedIdxs(new Set());
+        applyRows(data.rows);
       }
     } catch (e) {
       setError(String(e));
@@ -141,8 +172,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   function applyManualMapping() {
     const channelCodes = skipChannelFilter ? null : new Set(DEFAULT_CHANNEL_CODES[platform] ?? DEFAULT_CHANNEL_CODES.facebook);
     const { rows: newRows, debug: newDebug } = buildRowsFromMap(dicts, manualMap, channelCodes);
-    setRows(newRows);
-    setSelectedIdxs(new Set());
+    applyRows(newRows);
     setDebug(newDebug);
     setError(newRows.length === 0 ? 'No rows matched this mapping — check the channel filter or column choices.' : null);
   }
@@ -195,10 +225,15 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
               }
               const isValidUrl = /^https?:\/\//i.test(r.final_url ?? '');
               if (!isValidUrl) invalidUrlCount++;
+              // If the CTA column held label text instead of a URL, map it to
+              // the ad's CTA field as a best-effort. Awareness rows like
+              // "Watch & Subscribe" → 'Subscribe'.
+              const guessedCta = !isValidUrl ? guessCta(r.final_url) : '';
               updateGoogleAd(id, adId, {
                 ad_name: title || r.creative_name || videoId,
                 video_id: videoId,
                 final_url: isValidUrl ? r.final_url : '',
+                ...(guessedCta ? { cta: guessedCta } : {}),
               });
               if (title) {
                 try {
@@ -243,11 +278,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
 
           // Multiple Asset Links in one row = multiple separate ads under
           // the same ad set ("ad diversification" in Shimano's briefing
-          // convention) — one ad per link, not one ad per row. The link
-          // itself goes in URL tags so it's carried through to the export
-          // (Ads Manager has no bulk-upload column for "boost this post by
-          // URL", but at least the link isn't lost) — Title/Body are left
-          // blank for manual entry, no AI guessing at copy we can't verify.
+          // convention) — one ad per link, not one ad per row.
           const links = splitAssetLinks(r.asset_link);
           links.forEach((link, i) => {
             const adId = addFbAd(id);
@@ -268,6 +299,8 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
     }
     if (lastId) onDone(lastId);
   }
+
+  const qcWarningRowCount = qcResults.filter((r) => r.flags.length > 0).length;
 
   return (
     <div className="rounded-md border border-ink-200 bg-ink-50 p-4">
@@ -380,6 +413,14 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
       {rows.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-sm font-semibold text-brand-600">{rows.length} row(s) found — select the ones to import.</p>
+
+          {/* QC summary line */}
+          {qcWarningRowCount > 0 && (
+            <p className="mb-2 rounded-md bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+              ⚠ {qcWarningRowCount} of {rows.length} row{rows.length !== 1 ? 's' : ''} have data issues — click the badge on each row to see details. You can still import; use your judgement on which flags matter.
+            </p>
+          )}
+
           <TextInput
             placeholder="Search rows (e.g. JUN, market code, product...)"
             value={search}
@@ -407,22 +448,49 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
               {filteredIdxs.length > 0 && filteredIdxs.every((i) => selectedIdxs.has(i)) ? 'Deselect all' : 'Select all'}
             </button>
           </div>
+
           <div className="max-h-64 overflow-y-auto rounded-md border border-ink-200 bg-white">
             {filteredIdxs.length === 0 && (
               <p className="px-3 py-2 text-sm text-ink-400">No rows match &ldquo;{search}&rdquo;.</p>
             )}
             {filteredIdxs.map((i) => {
               const r = rows[i];
+              const flags = qcResults[i]?.flags ?? [];
+              const isQcOpen = qcExpanded.has(i);
               return (
-                <label key={i} className="flex cursor-pointer items-center gap-2 border-b border-ink-100 px-3 py-2 text-sm text-ink-700 last:border-0 hover:bg-ink-50">
-                  <input type="checkbox" checked={selectedIdxs.has(i)} onChange={() => toggleRow(i)} />
-                  <span className="flex-1 truncate">
-                    {r.adset_name || r.campaign_name || `Row ${i + 1}`} · {r.month} · {r.budget}
-                  </span>
-                </label>
+                <div key={i} className="border-b border-ink-100 last:border-0">
+                  <div className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-ink-50">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                      <input type="checkbox" checked={selectedIdxs.has(i)} onChange={() => toggleRow(i)} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {r.adset_name || r.campaign_name || `Row ${i + 1}`} · {r.month} · {r.budget}
+                      </span>
+                    </label>
+                    {flags.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleQcRow(i)}
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold transition ${isQcOpen ? 'bg-amber-200 text-amber-900' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                        title="Click to see data issues for this row"
+                      >
+                        ⚠ {flags.length}
+                      </button>
+                    )}
+                  </div>
+                  {isQcOpen && flags.length > 0 && (
+                    <div className="mx-3 mb-2 space-y-1 rounded-md bg-amber-50 p-2 text-xs text-amber-800">
+                      {flags.map((f, fi) => (
+                        <p key={fi}>
+                          <span className="font-semibold">{f.field}:</span> {f.message}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
+
           <button
             onClick={handleImport}
             disabled={selectedIdxs.size === 0 || importing}
