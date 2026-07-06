@@ -45,7 +45,6 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [urlWarning, setUrlWarning] = useState<string | null>(null);
 
   // QC state — computed once after rows are fetched, cleared on each new fetch
   const [qcResults, setQcResults] = useState<RowQcResult[]>([]);
@@ -200,9 +199,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
 
   async function handleImport() {
     setImporting(true);
-    setUrlWarning(null);
     let lastId = '';
-    let invalidUrlCount = 0;
     try {
       for (const idx of selectedIdxs) {
         const r = rows[idx];
@@ -218,7 +215,6 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
             const assetLinks = splitAssetLinks(r.asset_link);
             const linksToProcess = assetLinks.length > 0 ? assetLinks : [r.asset_link.trim()].filter(Boolean);
             const isValidUrl = /^https?:\/\//i.test(r.final_url ?? '');
-            if (!isValidUrl && linksToProcess.length > 0) invalidUrlCount++;
             const guessedCta = !isValidUrl ? guessCta(r.final_url) : '';
 
             for (const link of linksToProcess) {
@@ -234,10 +230,12 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
               } catch {
                 // title fetch is best-effort
               }
+              // No CTA URL → fall back to the YouTube video link so the ad
+              // always has a valid destination rather than being left blank.
               updateGoogleAd(id, adId, {
                 ad_name: title || r.creative_name || videoId,
                 video_id: videoId,
-                final_url: isValidUrl ? r.final_url : '',
+                final_url: isValidUrl ? r.final_url : link,
                 ...(guessedCta ? { cta: guessedCta } : {}),
               });
               if (title) {
@@ -300,9 +298,6 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
       setImporting(false);
       setSelectedIdxs(new Set());
       setQcExpanded(new Set());
-    }
-    if (invalidUrlCount > 0) {
-      setUrlWarning(`${invalidUrlCount} ad(s) imported with a missing or invalid Final URL — check the CTA column in the briefing sheet.`);
     }
     if (lastId) onDone(lastId);
   }
@@ -505,7 +500,6 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
           >
             {importing ? 'Importing…' : `＋ Import ${selectedIdxs.size} campaign(s)`}
           </button>
-          {urlWarning && <p className="mt-2 text-xs text-amber-600">{urlWarning}</p>}
         </div>
       )}
     </div>
