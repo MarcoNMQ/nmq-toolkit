@@ -9,12 +9,10 @@ import type { GoogleCampaign, FbCampaign } from '@/lib/campaign/types';
 type AnyCampaign = GoogleCampaign | FbCampaign;
 
 function getMarket(c: AnyCampaign): string {
-  const market = ('market' in c ? c.market : '') || '';
-  if (market) return market;
-  // Campaigns with no regional market but key_category YES are cross-market
-  // key product campaigns — label them as a group rather than a catch-all.
+  // Key Products campaigns always go in their own bucket regardless of market,
+  // because they are SEU-wide and not tied to a single regional market.
   if ('key_category' in c && c.key_category === 'YES') return 'Key Products';
-  return '—';
+  return ('market' in c ? c.market : '') || '—';
 }
 
 export function Sidebar() {
