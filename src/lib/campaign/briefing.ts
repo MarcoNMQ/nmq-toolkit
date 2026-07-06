@@ -309,6 +309,7 @@ export const MARKET_CODE_TO_COUNTRIES: Record<string, string[]> = {
 };
 
 export const GOAL_CODE_TO_GOOGLE_MAIN: Record<string, string> = {
+  // Short codes (from Goal_Code column)
   CON: 'Traffic',
   AWA: 'Awareness',
   CONV: 'Conversions',
@@ -316,6 +317,16 @@ export const GOAL_CODE_TO_GOOGLE_MAIN: Record<string, string> = {
   RCH: 'Awareness',
   IMP: 'Awareness',
   DG: 'Awareness',
+  // Full-text labels (from Performance_Goal column — same field, different column format)
+  Traffic: 'Traffic',
+  Awareness: 'Awareness',
+  Conversions: 'Conversions',
+  Leads: 'Conversions',
+  Engagement: 'Engagement',
+  'Video Views': 'Engagement',
+  Reach: 'Awareness',
+  Impressions: 'Awareness',
+  'Demand Gen': 'Awareness',
 };
 
 export const PERF_CODE_TO_GOOGLE_PERF: Record<string, string> = {

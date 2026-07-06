@@ -212,9 +212,20 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
           lastId = id;
 
           if (r.asset_link) {
-            const match = r.asset_link.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
-            const videoId = match ? match[1] : '';
-            if (videoId) {
+            // Multiple YouTube links in one cell = multiple ad variants under
+            // the same campaign — same pattern as Facebook ad diversification.
+            // splitAssetLinks splits on newlines/commas, keeps only https:// URLs.
+            const assetLinks = splitAssetLinks(r.asset_link);
+            const linksToProcess = assetLinks.length > 0 ? assetLinks : [r.asset_link.trim()].filter(Boolean);
+            const isValidUrl = /^https?:\/\//i.test(r.final_url ?? '');
+            if (!isValidUrl && linksToProcess.length > 0) invalidUrlCount++;
+            const guessedCta = !isValidUrl ? guessCta(r.final_url) : '';
+
+            for (const link of linksToProcess) {
+              const match = link.match(/(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
+              const videoId = match ? match[1] : '';
+              if (!videoId) continue;
+
               const adId = addGoogleAd(id);
               let title = '';
               try {
@@ -223,12 +234,6 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
               } catch {
                 // title fetch is best-effort
               }
-              const isValidUrl = /^https?:\/\//i.test(r.final_url ?? '');
-              if (!isValidUrl) invalidUrlCount++;
-              // If the CTA column held label text instead of a URL, map it to
-              // the ad's CTA field as a best-effort. Awareness rows like
-              // "Watch & Subscribe" → 'Subscribe'.
-              const guessedCta = !isValidUrl ? guessCta(r.final_url) : '';
               updateGoogleAd(id, adId, {
                 ad_name: title || r.creative_name || videoId,
                 video_id: videoId,
