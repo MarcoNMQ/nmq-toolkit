@@ -298,6 +298,8 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
       }
     } finally {
       setImporting(false);
+      setSelectedIdxs(new Set());
+      setQcExpanded(new Set());
     }
     if (invalidUrlCount > 0) {
       setUrlWarning(`${invalidUrlCount} ad(s) imported with a missing or invalid Final URL — check the CTA column in the briefing sheet.`);

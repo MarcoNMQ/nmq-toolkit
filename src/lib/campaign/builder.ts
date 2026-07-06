@@ -44,9 +44,10 @@ function defaultLabels(c: GoogleCampaign): string {
 
 function buildCampaignRow(c: GoogleCampaign): CsvRow {
   const row = emptyRow();
+  const isSearch = c.channel === 'Search';
 
   row['Campaign'] = c.campaign_name;
-  row['Campaign Type'] = CAMP_TYPE;
+  row['Campaign Type'] = isSearch ? 'Search' : CAMP_TYPE;
   row['Networks'] = c.networks || NETWORKS;
   row['Budget'] = Number(c.budget ?? 0).toFixed(2);
   row['Budget type'] = c.budget_type ?? BUDGET_TYPE;

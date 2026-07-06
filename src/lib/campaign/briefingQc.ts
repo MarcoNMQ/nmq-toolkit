@@ -2,6 +2,7 @@ import {
   GOAL_CODE_TO_GOOGLE_MAIN, MARKET_CODE_TO_COUNTRIES,
   PERF_CODE_TO_GOOGLE_PERF, buildYtNames, type BriefingRow,
 } from './briefing';
+import { PRODUCT_CATEGORIES } from './constants';
 
 export interface QcFlag {
   field: string;
@@ -83,6 +84,8 @@ export function qcBriefingRows(rows: BriefingRow[]): RowQcResult[] {
 
     if (!r.category?.trim()) {
       flags.push({ field: 'Category', message: 'Category is blank — campaign name will be incomplete.' });
+    } else if (!PRODUCT_CATEGORIES.includes(r.category)) {
+      flags.push({ field: 'Category', message: `Category "${r.category}" is not a recognised Shimano product category. Expected one of: ${PRODUCT_CATEGORIES.join(', ')}.` });
     }
 
     // 4. Duplicate name collision
