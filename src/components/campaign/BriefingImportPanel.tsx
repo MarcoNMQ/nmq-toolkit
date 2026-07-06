@@ -31,6 +31,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [urlWarning, setUrlWarning] = useState<string | null>(null);
 
   // Raw column data kept around so the user can manually remap columns if
   // auto-detection doesn't match the sheet (e.g. a non-Shimano briefing).
@@ -169,7 +170,9 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
 
   async function handleImport() {
     setImporting(true);
+    setUrlWarning(null);
     let lastId = '';
+    let invalidUrlCount = 0;
     try {
       for (const idx of selectedIdxs) {
         const r = rows[idx];
@@ -190,10 +193,12 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
               } catch {
                 // title fetch is best-effort
               }
+              const isValidUrl = /^https?:\/\//i.test(r.final_url ?? '');
+              if (!isValidUrl) invalidUrlCount++;
               updateGoogleAd(id, adId, {
                 ad_name: title || r.creative_name || videoId,
                 video_id: videoId,
-                final_url: r.final_url,
+                final_url: isValidUrl ? r.final_url : '',
               });
               if (title) {
                 try {
@@ -257,6 +262,9 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
       }
     } finally {
       setImporting(false);
+    }
+    if (invalidUrlCount > 0) {
+      setUrlWarning(`${invalidUrlCount} ad(s) imported with a missing or invalid Final URL — check the CTA column in the briefing sheet.`);
     }
     if (lastId) onDone(lastId);
   }
@@ -422,6 +430,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
           >
             {importing ? 'Importing…' : `＋ Import ${selectedIdxs.size} campaign(s)`}
           </button>
+          {urlWarning && <p className="mt-2 text-xs text-amber-600">{urlWarning}</p>}
         </div>
       )}
     </div>

@@ -268,6 +268,11 @@ export function validateCampaigns(campaigns: GoogleCampaign[]): string[] {
 
     (c.ads ?? []).forEach((ad, j) => {
       const adLabel = `${label} › Ad ${j + 1}`;
+      if (!ad.final_url) {
+        errors.push(`${adLabel}: Final URL is required.`);
+      } else if (!/^https?:\/\//i.test(ad.final_url)) {
+        errors.push(`${adLabel}: Final URL must start with https:// (got "${ad.final_url.slice(0, 40)}").`);
+      }
       const a = ad as unknown as Record<string, string>;
       const headlineCount = isSearch ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].filter((k) => a[`headline_${k}`]).length : 0;
       for (let k = 1; k <= 15; k++) {

@@ -64,7 +64,7 @@ export const CSV_HEADERS = [
 ] as const;
 
 // ── Dropdown options ───────────────────────────────────────────────────────────
-export const CHANNELS = ['YouTube', 'Facebook & Instagram', 'Facebook', 'Instagram', 'Search'];
+export const CHANNELS = ['YouTube', 'Search'];
 
 export const MAIN_GOALS = ['Awareness', 'Traffic', 'Conversions', 'Leads', 'Engagement'];
 
