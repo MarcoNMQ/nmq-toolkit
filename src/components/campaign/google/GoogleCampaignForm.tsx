@@ -51,7 +51,8 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
   function onMarketChange(market: string) {
     const group = MARKET_TO_GROUP[market] ?? '';
     const countries = COUNTRY_GROUP_PRESETS[group] ?? [];
-    patch({ market, country_group: group, countries });
+    const languages = Array.from(new Set(countries.flatMap((c) => COUNTRY_LANGUAGE_MAP[c] ?? []))).join(',');
+    patch({ market, country_group: group, countries, languages });
   }
 
   const isBlank = !campaign.market && !campaign.product_category && campaign.budget === 0 && campaign.ads.length === 0;
@@ -319,8 +320,26 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
         <Field label="End date">
           <TextInput type="date" value={campaign.end_date} onChange={(e) => patch({ end_date: e.target.value })} />
         </Field>
-        <Field label="Budget (€/day)">
-          <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} />
+        <Field label={`Budget (€ ${campaign.budget_type === 'Daily' ? 'per day' : 'total'})`}>
+          <div className="flex gap-2">
+            <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} className="flex-1" />
+            <div className="flex shrink-0 rounded-md bg-ink-100 p-0.5 text-xs font-bold">
+              <button
+                type="button"
+                className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Campaign total' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
+                onClick={() => patch({ budget_type: 'Campaign total' })}
+              >
+                Total
+              </button>
+              <button
+                type="button"
+                className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Daily' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
+                onClick={() => patch({ budget_type: 'Daily' })}
+              >
+                Daily
+              </button>
+            </div>
+          </div>
         </Field>
         <Field label="Bid strategy">
           <Select value={campaign.bid_strategy} onChange={(e) => patch({ bid_strategy: e.target.value })}>

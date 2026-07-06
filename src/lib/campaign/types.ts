@@ -85,6 +85,7 @@ export interface GoogleCampaign {
   labels: string;
   start_date: string;
   end_date: string;
+  budget_type: 'Daily' | 'Campaign total';
   max_cpc?: number;
   max_cpm?: number;
   target_cpv?: number;

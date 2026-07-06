@@ -49,7 +49,7 @@ function buildCampaignRow(c: GoogleCampaign): CsvRow {
   row['Campaign Type'] = CAMP_TYPE;
   row['Networks'] = c.networks || NETWORKS;
   row['Budget'] = Number(c.budget ?? 0).toFixed(2);
-  row['Budget type'] = BUDGET_TYPE;
+  row['Budget type'] = c.budget_type ?? BUDGET_TYPE;
   row['EU political ads'] = EU_POL;
   row['Languages'] = c.languages || LANGUAGES;
   row['Bid Strategy Type'] = c.bid_strategy ?? '';

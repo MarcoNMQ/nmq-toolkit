@@ -1,5 +1,5 @@
 import {
-  BID_STRATEGIES, CTAS, MARKET_TO_GROUP, MONTHS,
+  BID_STRATEGIES, COUNTRY_LANGUAGE_MAP, CTAS, MARKET_TO_GROUP, MONTHS,
 } from './constants';
 import {
   GOAL_CODE_TO_FB_OBJ, GOAL_CODE_TO_GOOGLE_MAIN, MARKET_CODE_TO_COUNTRIES,
@@ -24,6 +24,8 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
   }
   const { campaignName, adsetName } = buildYtNames(r);
 
+  const languages = Array.from(new Set(countries.flatMap((c) => COUNTRY_LANGUAGE_MAP[c] ?? []))).join(',');
+
   return {
     channel: 'YouTube',
     main_goal: mainGoal,
@@ -36,6 +38,7 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
     market,
     country_group: countryGroup,
     countries,
+    languages,
     location_level: 'campaign',
     month,
     budget: parseBriefingBudget(r.budget),
