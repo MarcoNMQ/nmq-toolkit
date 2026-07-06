@@ -114,7 +114,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2">
         {campaigns.length === 0 && (
           <p className="px-2 py-4 text-sm text-ink-400">No campaigns yet.</p>
         )}
@@ -181,12 +181,12 @@ export function Sidebar() {
         })}
       </div>
 
-      <div className="border-t border-ink-100 p-3 text-xs font-medium text-ink-500">
+      <div className="shrink-0 border-t border-ink-100 p-3 text-xs font-medium text-ink-500">
         {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'} · {totalAds} ad{totalAds === 1 ? '' : 's'} · €{totalBudget.toFixed(2)} budget
       </div>
 
       {errors.length > 0 && (
-        <details className="border-t border-ink-100 px-3 py-2 text-xs text-red-600">
+        <details className="shrink-0 border-t border-ink-100 px-3 py-2 text-xs text-red-600">
           <summary className="cursor-pointer font-semibold">{errors.length} validation issue{errors.length === 1 ? '' : 's'}</summary>
           <ul className="mt-1 list-disc pl-4">
             {errors.map((e, i) => (
@@ -196,7 +196,7 @@ export function Sidebar() {
         </details>
       )}
 
-      <div className="border-t border-ink-100 p-3">
+      <div className="shrink-0 overflow-y-auto border-t border-ink-100 p-3">
         <button
           disabled={exporting || campaigns.length === 0}
           onClick={handleExport}
