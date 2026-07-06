@@ -4,6 +4,13 @@ import { useMemo, useRef, useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { validateCampaigns } from '@/lib/campaign/builder';
 import { validateFbCampaigns } from '@/lib/campaign/fbBuilder';
+import type { GoogleCampaign, FbCampaign } from '@/lib/campaign/types';
+
+type AnyCampaign = GoogleCampaign | FbCampaign;
+
+function getMarket(c: AnyCampaign): string {
+  return ('market' in c ? c.market : '') || '—';
+}
 
 export function Sidebar() {
   const platform = useBuilderStore((s) => s.platform);
@@ -24,6 +31,8 @@ export function Sidebar() {
 
   const [exporting, setExporting] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [collapsedMarkets, setCollapsedMarkets] = useState<Set<string>>(new Set());
+
   const isDragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
@@ -47,7 +56,30 @@ export function Sidebar() {
     document.addEventListener('mouseup', onUp);
   }
 
+  function toggleMarket(key: string) {
+    setCollapsedMarkets((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
   const campaigns = platform === 'google' ? googleCampaigns : fbCampaigns;
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, AnyCampaign[]>();
+    for (const c of campaigns) {
+      const key = getMarket(c);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      if (a === '—') return 1;
+      if (b === '—') return -1;
+      return a.localeCompare(b);
+    });
+  }, [campaigns]);
+
   const errors = useMemo(
     () => (platform === 'google' ? validateCampaigns(googleCampaigns) : validateFbCampaigns(fbCampaigns)),
     [platform, googleCampaigns, fbCampaigns],
@@ -90,12 +122,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Backdrop — mobile only */}
       {mobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
-          onClick={() => setMobileSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileSidebarOpen(false)} />
       )}
 
       <aside
@@ -109,6 +137,7 @@ export function Sidebar() {
           title="Drag to resize"
         />
 
+        {/* Header */}
         <div className="border-b border-ink-100 p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-base font-extrabold tracking-tight text-ink-900">NMQ Campaign Builder</span>
@@ -136,6 +165,7 @@ export function Sidebar() {
           </div>
         </div>
 
+        {/* New campaign */}
         <div className="p-3">
           <button
             className="w-full rounded-md bg-brand-500 py-2 text-sm font-bold text-white transition hover:bg-brand-600"
@@ -145,73 +175,100 @@ export function Sidebar() {
           </button>
         </div>
 
+        {/* Campaign tree grouped by market */}
         <div className="min-h-0 flex-1 overflow-y-auto px-2">
           {campaigns.length === 0 && (
             <p className="px-2 py-4 text-sm text-ink-400">No campaigns yet.</p>
           )}
-          {campaigns.map((c) => {
-            const isOpen = expanded[c.id] ?? true;
-            const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
+
+          {grouped.map(([market, group]) => {
+            const isMarketOpen = !collapsedMarkets.has(market);
             return (
-              <div key={c.id} className="mb-1">
-                <div
-                  className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition ${isSelected ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-700 hover:bg-ink-50'}`}
+              <div key={market} className="mb-1">
+                {/* Market group header */}
+                <button
+                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition hover:bg-ink-50"
+                  onClick={() => toggleMarket(market)}
                 >
-                  <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-brand-100 text-brand-600">C</span>
-                  <button onClick={() => toggleExpanded(c.id)} className="shrink-0 text-ink-400">
-                    {isOpen ? '▾' : '▸'}
-                  </button>
-                  <button
-                    className="min-w-0 flex-1 truncate text-left"
-                    onClick={() => setSelected({ type: 'campaign', campaignId: c.id })}
-                    title={c.campaign_name}
-                  >
-                    {c.campaign_name || '(unnamed campaign)'}
-                  </button>
-                  <button
-                    className="shrink-0 opacity-0 group-hover:opacity-100"
-                    title="Duplicate"
-                    onClick={() => (platform === 'google' ? duplicateGoogleCampaign(c.id) : duplicateFbCampaign(c.id))}
-                  >
-                    📋
-                  </button>
-                  <button
-                    className="shrink-0 opacity-0 group-hover:opacity-100"
-                    title="Delete"
-                    onClick={() => (platform === 'google' ? removeGoogleCampaign(c.id) : removeFbCampaign(c.id))}
-                  >
-                    🗑
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="ml-5 border-l-2 border-ink-100 pl-2">
-                    <button
-                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'adgroup' && selected.campaignId === c.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-500 hover:bg-ink-50'}`}
-                      onClick={() => setSelected({ type: 'adgroup', campaignId: c.id })}
-                    >
-                      <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-mint-100 text-mint-700">AG</span>
-                      <span className="min-w-0 truncate" title={c.adset_name}>
-                        {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
-                      </span>
-                    </button>
-                    {c.ads.map((ad) => (
-                      <button
-                        key={ad.id}
-                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
-                        onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
-                      >
-                        <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
-                        <span className="min-w-0 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
-                          {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
-                        </span>
-                      </button>
-                    ))}
-                    <button
-                      className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-bold text-brand-600 hover:bg-ink-50"
-                      onClick={() => setSelected({ type: 'new_ad', campaignId: c.id })}
-                    >
-                      + Add ad
-                    </button>
+                  <span className="text-[11px] text-ink-400">{isMarketOpen ? '▾' : '▸'}</span>
+                  <span className="flex-1 text-xs font-extrabold uppercase tracking-widest text-ink-700">{market}</span>
+                  <span className="shrink-0 rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">
+                    {group.length}
+                  </span>
+                </button>
+
+                {/* Campaigns under this market */}
+                {isMarketOpen && (
+                  <div className="ml-2 border-l-2 border-ink-100 pl-1">
+                    {group.map((c) => {
+                      const isOpen = expanded[c.id] ?? true;
+                      const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
+                      return (
+                        <div key={c.id} className="mb-0.5">
+                          <div
+                            className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition ${isSelected ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-700 hover:bg-ink-50'}`}
+                          >
+                            <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-brand-100 text-brand-600">C</span>
+                            <button onClick={() => toggleExpanded(c.id)} className="shrink-0 text-ink-400">
+                              {isOpen ? '▾' : '▸'}
+                            </button>
+                            <button
+                              className="min-w-0 flex-1 truncate text-left"
+                              onClick={() => setSelected({ type: 'campaign', campaignId: c.id })}
+                              title={c.campaign_name}
+                            >
+                              {c.campaign_name || '(unnamed campaign)'}
+                            </button>
+                            <button
+                              className="shrink-0 opacity-0 group-hover:opacity-100"
+                              title="Duplicate"
+                              onClick={() => (platform === 'google' ? duplicateGoogleCampaign(c.id) : duplicateFbCampaign(c.id))}
+                            >
+                              📋
+                            </button>
+                            <button
+                              className="shrink-0 opacity-0 group-hover:opacity-100"
+                              title="Delete"
+                              onClick={() => (platform === 'google' ? removeGoogleCampaign(c.id) : removeFbCampaign(c.id))}
+                            >
+                              🗑
+                            </button>
+                          </div>
+
+                          {isOpen && (
+                            <div className="ml-5 border-l-2 border-ink-100 pl-2">
+                              <button
+                                className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'adgroup' && selected.campaignId === c.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-500 hover:bg-ink-50'}`}
+                                onClick={() => setSelected({ type: 'adgroup', campaignId: c.id })}
+                              >
+                                <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-mint-100 text-mint-700">AG</span>
+                                <span className="min-w-0 truncate" title={c.adset_name}>
+                                  {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
+                                </span>
+                              </button>
+                              {c.ads.map((ad) => (
+                                <button
+                                  key={ad.id}
+                                  className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
+                                  onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                                >
+                                  <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
+                                  <span className="min-w-0 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
+                                    {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
+                                  </span>
+                                </button>
+                              ))}
+                              <button
+                                className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-bold text-brand-600 hover:bg-ink-50"
+                                onClick={() => setSelected({ type: 'new_ad', campaignId: c.id })}
+                              >
+                                + Add ad
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -219,10 +276,12 @@ export function Sidebar() {
           })}
         </div>
 
+        {/* Stats */}
         <div className="shrink-0 border-t border-ink-100 p-3 text-xs font-medium text-ink-500">
           {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'} · {totalAds} ad{totalAds === 1 ? '' : 's'} · €{totalBudget.toFixed(2)} budget
         </div>
 
+        {/* Validation errors */}
         {errors.length > 0 && (
           <details className="shrink-0 border-t border-ink-100 px-3 py-2 text-xs text-red-600">
             <summary className="cursor-pointer font-semibold">{errors.length} validation issue{errors.length === 1 ? '' : 's'}</summary>
@@ -234,6 +293,7 @@ export function Sidebar() {
           </details>
         )}
 
+        {/* Export + clear */}
         <div className="shrink-0 border-t border-ink-100 p-3">
           <button
             disabled={exporting || campaigns.length === 0}
