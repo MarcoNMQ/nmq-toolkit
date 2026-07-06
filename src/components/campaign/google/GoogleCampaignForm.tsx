@@ -320,6 +320,60 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
         </Field>
       </div>
 
+      <details className="rounded-md border border-ink-200">
+        <summary className="cursor-pointer px-4 py-2 text-sm font-semibold text-ink-600">Audience &amp; placement setup (optional)</summary>
+        <div className="space-y-4 border-t border-ink-200 p-4">
+          <p className="text-xs text-ink-400">These fields are for your own reference only — they are not exported to the CSV. Use them to keep audience strategy notes alongside the campaign settings.</p>
+          <Field label="Audience type">
+            <Select
+              value={campaign.audience_type ?? ''}
+              onChange={(e) => patch({ audience_type: e.target.value as GoogleCampaign['audience_type'] })}
+            >
+              <option value="">— Not specified —</option>
+              <option>In-market</option>
+              <option>Affinity</option>
+              <option>Life events</option>
+              <option>Detailed demographics</option>
+              <option>Custom segment</option>
+              <option>Your data segment</option>
+              <option>Optimized targeting</option>
+            </Select>
+          </Field>
+          {campaign.audience_type === 'Custom segment' ? (
+            <Field
+              label="Custom segment keywords / URLs / apps"
+              hint="One per line — these are the signals you'd enter when building the custom segment in Google Ads"
+            >
+              <textarea
+                rows={5}
+                value={campaign.audience_keywords ?? ''}
+                onChange={(e) => patch({ audience_keywords: e.target.value })}
+                placeholder={'running shoes\nhttps://competitor.com\nFitness Tracker app'}
+                className="w-full rounded-md border border-ink-300 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </Field>
+          ) : (
+            <Field
+              label="Audience segments"
+              hint="Names of the in-market, affinity, or data segments you plan to target"
+            >
+              <TextInput
+                value={campaign.audience_segments ?? ''}
+                onChange={(e) => patch({ audience_segments: e.target.value })}
+                placeholder="e.g. Outdoor enthusiasts, Fishing gear buyers"
+              />
+            </Field>
+          )}
+          <Field label="Placement notes" hint="e.g. In-stream only, exclude gaming channels">
+            <TextInput
+              value={campaign.placement_notes ?? ''}
+              onChange={(e) => patch({ placement_notes: e.target.value })}
+              placeholder="e.g. In-stream only"
+            />
+          </Field>
+        </div>
+      </details>
+
       {isSearch && (
         <div className="space-y-6 border-t border-ink-200 pt-6">
           <div>

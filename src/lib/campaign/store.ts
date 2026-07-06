@@ -55,6 +55,10 @@ export function newGoogleCampaign(): GoogleCampaign {
     ads: [],
     keywords: [],
     sitelinks: [],
+    audience_type: '',
+    audience_segments: '',
+    audience_keywords: '',
+    placement_notes: '',
   };
 }
 

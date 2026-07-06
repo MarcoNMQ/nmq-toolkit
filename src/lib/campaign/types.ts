@@ -95,6 +95,11 @@ export interface GoogleCampaign {
   // any other channel, simply unused.
   keywords: GoogleKeyword[];
   sitelinks: GoogleSitelink[];
+  // Audience & placement — optional setup notes, not exported to CSV.
+  audience_type?: 'In-market' | 'Affinity' | 'Life events' | 'Detailed demographics' | 'Custom segment' | 'Your data segment' | 'Optimized targeting' | '';
+  audience_segments?: string;
+  audience_keywords?: string;
+  placement_notes?: string;
 }
 
 // Types for the Facebook/Instagram campaign shape.
