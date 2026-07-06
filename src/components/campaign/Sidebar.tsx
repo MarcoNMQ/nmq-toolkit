@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { validateCampaigns } from '@/lib/campaign/builder';
 import { validateFbCampaigns } from '@/lib/campaign/fbBuilder';
@@ -23,6 +23,29 @@ export function Sidebar() {
   const clearAll = useBuilderStore((s) => s.clearAll);
 
   const [exporting, setExporting] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  function onHandleMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    isDragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = sidebarWidth;
+
+    function onMove(ev: MouseEvent) {
+      if (!isDragging.current) return;
+      setSidebarWidth(Math.max(240, Math.min(680, startWidth.current + (ev.clientX - startX.current))));
+    }
+    function onUp() {
+      isDragging.current = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
 
   const campaigns = platform === 'google' ? googleCampaigns : fbCampaigns;
   const errors = useMemo(
@@ -67,7 +90,7 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Backdrop — mobile only, tap to dismiss the drawer */}
+      {/* Backdrop — mobile only */}
       {mobileSidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/40 md:hidden"
@@ -76,171 +99,186 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-hidden bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:h-full md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ width: sidebarWidth }}
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen max-w-[85vw] flex-col overflow-hidden bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:h-full md:max-w-none md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-      <div className="border-b border-ink-100 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-base font-extrabold tracking-tight text-ink-900">NMQ Campaign Builder</span>
+        {/* Drag-to-resize handle — desktop only */}
+        <div
+          onMouseDown={onHandleMouseDown}
+          className="absolute right-0 top-0 bottom-0 z-10 hidden w-1 cursor-col-resize bg-transparent hover:bg-brand-300 active:bg-brand-500 md:block"
+          title="Drag to resize"
+        />
+
+        <div className="border-b border-ink-100 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-base font-extrabold tracking-tight text-ink-900">NMQ Campaign Builder</span>
+            <button
+              className="rounded-md p-1 text-ink-400 hover:bg-ink-50 md:hidden"
+              onClick={() => setMobileSidebarOpen(false)}
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex gap-2 text-sm font-bold">
+            <button
+              className={`flex-1 rounded-full py-1.5 transition ${platform === 'google' ? 'bg-mint-500 text-white' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'}`}
+              onClick={() => setPlatform('google')}
+            >
+              Google
+            </button>
+            <button
+              className={`flex-1 rounded-full py-1.5 transition ${platform === 'facebook' ? 'bg-mint-500 text-white' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'}`}
+              onClick={() => setPlatform('facebook')}
+            >
+              Facebook
+            </button>
+          </div>
+        </div>
+
+        <div className="p-3">
           <button
-            className="rounded-md p-1 text-ink-400 hover:bg-ink-50 md:hidden"
-            onClick={() => setMobileSidebarOpen(false)}
-            aria-label="Close menu"
+            className="w-full rounded-md bg-brand-500 py-2 text-sm font-bold text-white transition hover:bg-brand-600"
+            onClick={() => setSelected({ type: 'new_campaign' })}
           >
-            ✕
+            + New Campaign
           </button>
         </div>
-        <div className="flex gap-2 text-sm font-bold">
-          <button
-            className={`flex-1 rounded-full py-1.5 transition ${platform === 'google' ? 'bg-mint-500 text-white' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'}`}
-            onClick={() => setPlatform('google')}
-          >
-            Google
-          </button>
-          <button
-            className={`flex-1 rounded-full py-1.5 transition ${platform === 'facebook' ? 'bg-mint-500 text-white' : 'border border-ink-200 text-ink-500 hover:bg-ink-50'}`}
-            onClick={() => setPlatform('facebook')}
-          >
-            Facebook
-          </button>
-        </div>
-      </div>
 
-      <div className="p-3">
-        <button
-          className="w-full rounded-md bg-brand-500 py-2 text-sm font-bold text-white transition hover:bg-brand-600"
-          onClick={() => setSelected({ type: 'new_campaign' })}
-        >
-          + New Campaign
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-2">
-        {campaigns.length === 0 && (
-          <p className="px-2 py-4 text-sm text-ink-400">No campaigns yet.</p>
-        )}
-        {campaigns.map((c) => {
-          const isOpen = expanded[c.id] ?? true;
-          const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
-          return (
-            <div key={c.id} className="mb-1">
-              <div
-                className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition ${isSelected ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-700 hover:bg-ink-50'}`}
-              >
-                <button onClick={() => toggleExpanded(c.id)} className="text-ink-400">
-                  {isOpen ? '▾' : '▸'}
-                </button>
-                <button
-                  className="flex-1 truncate text-left"
-                  onClick={() => setSelected({ type: 'campaign', campaignId: c.id })}
-                  title={c.campaign_name}
+        <div className="min-h-0 flex-1 overflow-y-auto px-2">
+          {campaigns.length === 0 && (
+            <p className="px-2 py-4 text-sm text-ink-400">No campaigns yet.</p>
+          )}
+          {campaigns.map((c) => {
+            const isOpen = expanded[c.id] ?? true;
+            const isSelected = selected.type === 'campaign' && selected.campaignId === c.id;
+            return (
+              <div key={c.id} className="mb-1">
+                <div
+                  className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition ${isSelected ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-700 hover:bg-ink-50'}`}
                 >
-                  {c.campaign_name || '(unnamed campaign)'}
-                </button>
-                <button
-                  className="opacity-0 group-hover:opacity-100"
-                  title="Duplicate"
-                  onClick={() => (platform === 'google' ? duplicateGoogleCampaign(c.id) : duplicateFbCampaign(c.id))}
-                >
-                  📋
-                </button>
-                <button
-                  className="opacity-0 group-hover:opacity-100"
-                  title="Delete"
-                  onClick={() => (platform === 'google' ? removeGoogleCampaign(c.id) : removeFbCampaign(c.id))}
-                >
-                  🗑
-                </button>
-              </div>
-              {isOpen && (
-                <div className="ml-5 border-l-2 border-ink-100 pl-2">
-                  <button
-                    className={`block w-full truncate rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'adgroup' && selected.campaignId === c.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-500 hover:bg-ink-50'}`}
-                    onClick={() => setSelected({ type: 'adgroup', campaignId: c.id })}
-                  >
-                    {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
+                  <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-brand-100 text-brand-600">C</span>
+                  <button onClick={() => toggleExpanded(c.id)} className="shrink-0 text-ink-400">
+                    {isOpen ? '▾' : '▸'}
                   </button>
-                  {c.ads.map((ad) => (
-                    <button
-                      key={ad.id}
-                      className={`block w-full truncate rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
-                      onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
-                    >
-                      {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
-                    </button>
-                  ))}
                   <button
-                    className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-bold text-brand-600 hover:bg-ink-50"
-                    onClick={() => setSelected({ type: 'new_ad', campaignId: c.id })}
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => setSelected({ type: 'campaign', campaignId: c.id })}
+                    title={c.campaign_name}
                   >
-                    + Add ad
+                    {c.campaign_name || '(unnamed campaign)'}
+                  </button>
+                  <button
+                    className="shrink-0 opacity-0 group-hover:opacity-100"
+                    title="Duplicate"
+                    onClick={() => (platform === 'google' ? duplicateGoogleCampaign(c.id) : duplicateFbCampaign(c.id))}
+                  >
+                    📋
+                  </button>
+                  <button
+                    className="shrink-0 opacity-0 group-hover:opacity-100"
+                    title="Delete"
+                    onClick={() => (platform === 'google' ? removeGoogleCampaign(c.id) : removeFbCampaign(c.id))}
+                  >
+                    🗑
                   </button>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                {isOpen && (
+                  <div className="ml-5 border-l-2 border-ink-100 pl-2">
+                    <button
+                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'adgroup' && selected.campaignId === c.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-500 hover:bg-ink-50'}`}
+                      onClick={() => setSelected({ type: 'adgroup', campaignId: c.id })}
+                    >
+                      <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-mint-100 text-mint-700">AG</span>
+                      <span className="min-w-0 truncate" title={c.adset_name}>
+                        {c.adset_name || '(ad group)'} · {c.ads.length} ad{c.ads.length === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                    {c.ads.map((ad) => (
+                      <button
+                        key={ad.id}
+                        className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
+                        onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                      >
+                        <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
+                        <span className="min-w-0 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
+                          {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-bold text-brand-600 hover:bg-ink-50"
+                      onClick={() => setSelected({ type: 'new_ad', campaignId: c.id })}
+                    >
+                      + Add ad
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
-      <div className="shrink-0 border-t border-ink-100 p-3 text-xs font-medium text-ink-500">
-        {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'} · {totalAds} ad{totalAds === 1 ? '' : 's'} · €{totalBudget.toFixed(2)} budget
-      </div>
+        <div className="shrink-0 border-t border-ink-100 p-3 text-xs font-medium text-ink-500">
+          {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'} · {totalAds} ad{totalAds === 1 ? '' : 's'} · €{totalBudget.toFixed(2)} budget
+        </div>
 
-      {errors.length > 0 && (
-        <details className="shrink-0 border-t border-ink-100 px-3 py-2 text-xs text-red-600">
-          <summary className="cursor-pointer font-semibold">{errors.length} validation issue{errors.length === 1 ? '' : 's'}</summary>
-          <ul className="mt-1 max-h-28 list-disc overflow-y-auto pl-4">
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+        {errors.length > 0 && (
+          <details className="shrink-0 border-t border-ink-100 px-3 py-2 text-xs text-red-600">
+            <summary className="cursor-pointer font-semibold">{errors.length} validation issue{errors.length === 1 ? '' : 's'}</summary>
+            <ul className="mt-1 max-h-28 list-disc overflow-y-auto pl-4">
+              {errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </details>
+        )}
 
-      <div className="shrink-0 border-t border-ink-100 p-3">
-        <button
-          disabled={exporting || campaigns.length === 0}
-          onClick={handleExport}
-          className="w-full rounded-md border-2 border-brand-500 py-2 text-sm font-bold text-brand-600 transition hover:bg-brand-500 hover:text-white disabled:opacity-40"
-        >
-          {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV' : 'Export Excel (full)'}
-        </button>
-        {platform === 'facebook' && (
+        <div className="shrink-0 border-t border-ink-100 p-3">
           <button
             disabled={exporting || campaigns.length === 0}
-            onClick={handleFbAdsOnly}
-            className="mt-2 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
-            title="Exports only the ad rows — use this to add ads to an existing campaign without creating a duplicate campaign structure"
+            onClick={handleExport}
+            className="w-full rounded-md border-2 border-brand-500 py-2 text-sm font-bold text-brand-600 transition hover:bg-brand-500 hover:text-white disabled:opacity-40"
           >
-            {exporting ? 'Exporting…' : 'Export Ads only ↗'}
+            {exporting ? 'Exporting…' : platform === 'google' ? 'Export CSV' : 'Export Excel (full)'}
           </button>
-        )}
-        {hasKeywords && (
+          {platform === 'facebook' && (
+            <button
+              disabled={exporting || campaigns.length === 0}
+              onClick={handleFbAdsOnly}
+              className="mt-2 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
+              title="Exports only the ad rows — use this to add ads to an existing campaign without creating a duplicate campaign structure"
+            >
+              {exporting ? 'Exporting…' : 'Export Ads only ↗'}
+            </button>
+          )}
+          {hasKeywords && (
+            <button
+              disabled={exporting}
+              onClick={() => downloadExport('keywords', 'google_ads_keywords.csv')}
+              className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
+            >
+              Export Keywords CSV
+            </button>
+          )}
+          {hasSitelinks && (
+            <button
+              disabled={exporting}
+              onClick={() => downloadExport('sitelinks', 'google_ads_sitelinks.csv')}
+              className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
+            >
+              Export Sitelinks CSV
+            </button>
+          )}
           <button
-            disabled={exporting}
-            onClick={() => downloadExport('keywords', 'google_ads_keywords.csv')}
-            className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
+            onClick={() => {
+              if (window.confirm('Clear all campaigns and ads? This cannot be undone.')) clearAll();
+            }}
+            className="mt-2 w-full text-xs font-medium text-ink-400 hover:text-red-500 hover:underline"
           >
-            Export Keywords CSV
+            Clear all data
           </button>
-        )}
-        {hasSitelinks && (
-          <button
-            disabled={exporting}
-            onClick={() => downloadExport('sitelinks', 'google_ads_sitelinks.csv')}
-            className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
-          >
-            Export Sitelinks CSV
-          </button>
-        )}
-        <button
-          onClick={() => {
-            if (window.confirm('Clear all campaigns and ads? This cannot be undone.')) clearAll();
-          }}
-          className="mt-2 w-full text-xs font-medium text-ink-400 hover:text-red-500 hover:underline"
-        >
-          Clear all data
-        </button>
-      </div>
+        </div>
       </aside>
     </>
   );
