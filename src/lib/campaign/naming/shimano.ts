@@ -86,6 +86,12 @@ export const shimanoAdGroupFormula: NamingFormula<Partial<GoogleCampaign>> = {
 // manual campaign formula. Both positions are intentional: they mirror the
 // original Excel briefing sheet's TEXTJOIN formula exactly. Do not "fix"
 // this inconsistency — it IS the existing output.
+// TRF rows produce DG in the name — a Traffic YouTube campaign is a Demand
+// Gen campaign in Google Ads (campaign type switches automatically on setup).
+function perfCodeForName(code: string): string {
+  return code === 'TRF' ? 'DG' : code;
+}
+
 export const shimanoBriefingCampaignFormula: NamingFormula<BriefingRow> = {
   id: 'shimano-briefing-campaign',
   label: 'Shimano — Campaign Name (briefing import)',
@@ -97,7 +103,7 @@ export const shimanoBriefingCampaignFormula: NamingFormula<BriefingRow> = {
     const countrySegment = r.country_code && r.country_code !== r.market_code ? r.country_code : '';
     return [
       r.channel_code,
-      r.perf_code,
+      perfCodeForName(r.perf_code),
       r.category,
       r.subcategory,
       r.product,
@@ -119,7 +125,7 @@ export const shimanoBriefingAdGroupFormula: NamingFormula<BriefingRow> = {
     const countrySegment = r.country_code && r.country_code !== r.market_code ? r.country_code : '';
     return [
       r.channel_code,
-      r.perf_code,
+      perfCodeForName(r.perf_code),
       r.category,
       r.subcategory,
       r.product,

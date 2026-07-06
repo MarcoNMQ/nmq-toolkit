@@ -422,7 +422,7 @@ export const PERF_GOAL_CODES: Record<string, string> = {
   'Demand Gen': 'DG',
   'Video Views': 'VV',
   Reach: 'RCH',
-  Traffic: 'TRF',
+  Traffic: 'DG',
   Subscribers: 'SUBS',
   Impressions: 'IMP',
   Conversions: 'CONV',

@@ -42,7 +42,8 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
     start_date: parseBriefingDate(r.start_date),
     end_date: parseBriefingDate(r.end_date),
     cta: CTAS[0] ?? '',
-    bid_strategy: BID_STRATEGIES[0] ?? '',
+    // TRF rows are Demand Gen campaigns with Maximize clicks bidding.
+    bid_strategy: r.perf_code === 'TRF' ? 'Maximize clicks' : (BID_STRATEGIES[0] ?? ''),
     campaign_name: campaignName,
     adset_name: adsetName,
   };

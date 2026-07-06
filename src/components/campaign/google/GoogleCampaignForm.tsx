@@ -64,6 +64,10 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
     : [];
   const convention = getConventionForClient(campaign.client_profile);
   const isSearch = campaign.channel === 'Search';
+  const isYouTube = campaign.channel === 'YouTube';
+  const availablePerfGoals = isYouTube
+    ? PERF_GOALS.filter((g) => g === 'Video Views' || g === 'Demand Gen')
+    : PERF_GOALS;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -106,10 +110,22 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
             {MAIN_GOALS.map((g) => <option key={g}>{g}</option>)}
           </Select>
         </Field>
-        <Field label="Performance goal" tooltip="The specific metric this ad group optimizes for (e.g. Demand Gen, Video Views). Feeds the ad group name.">
-          <Select value={campaign.perf_goal} onChange={(e) => patch({ perf_goal: e.target.value })}>
+        <Field
+          label="Performance goal"
+          tooltip="The specific metric this ad group optimizes for. YouTube only shows Video Views and Demand Gen — Traffic campaigns on YouTube are Demand Gen campaigns with Maximize clicks bidding."
+        >
+          <Select
+            value={campaign.perf_goal}
+            onChange={(e) => {
+              const perf_goal = e.target.value;
+              // Demand Gen on YouTube = Maximize clicks bid strategy
+              const bid_strategy =
+                isYouTube && perf_goal === 'Demand Gen' ? 'Maximize clicks' : campaign.bid_strategy;
+              patch({ perf_goal, bid_strategy });
+            }}
+          >
             <option value="">—</option>
-            {PERF_GOALS.map((g) => <option key={g}>{g}</option>)}
+            {availablePerfGoals.map((g) => <option key={g}>{g}</option>)}
           </Select>
         </Field>
         <Field label="Month">
