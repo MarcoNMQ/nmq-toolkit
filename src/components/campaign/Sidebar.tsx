@@ -76,7 +76,7 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-hidden bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-80 max-w-[85vw] flex-col overflow-hidden bg-white border-r border-ink-100 transition-transform duration-200 md:relative md:h-full md:translate-x-0 ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
       <div className="border-b border-ink-100 p-4">
         <div className="mb-3 flex items-center justify-between">
@@ -188,7 +188,7 @@ export function Sidebar() {
       {errors.length > 0 && (
         <details className="shrink-0 border-t border-ink-100 px-3 py-2 text-xs text-red-600">
           <summary className="cursor-pointer font-semibold">{errors.length} validation issue{errors.length === 1 ? '' : 's'}</summary>
-          <ul className="mt-1 list-disc pl-4">
+          <ul className="mt-1 max-h-28 list-disc overflow-y-auto pl-4">
             {errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -196,7 +196,7 @@ export function Sidebar() {
         </details>
       )}
 
-      <div className="shrink-0 overflow-y-auto border-t border-ink-100 p-3">
+      <div className="shrink-0 border-t border-ink-100 p-3">
         <button
           disabled={exporting || campaigns.length === 0}
           onClick={handleExport}
