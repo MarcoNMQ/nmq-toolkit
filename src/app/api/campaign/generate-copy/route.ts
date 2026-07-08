@@ -73,8 +73,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
   }
 
-  const { videoTitle, productCategory, productPromoted } = await req.json();
+  const { videoTitle, productCategory, productPromoted, language } = await req.json();
   const client = new Anthropic({ apiKey });
+  const lang: string = language || 'English';
 
   const messages: MessageParam[] = [
     {
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
 Video title: "${videoTitle}"
 Product category: ${productCategory || 'n/a'}
 Product promoted: ${productPromoted || 'n/a'}
+Language: ${lang} — write every single string in ${lang}. Do not use English unless ${lang} IS English.
 
 Generate exactly 15 headlines, 5 long headlines, and 5 descriptions. Keep tone direct and benefit-led.
 
