@@ -33,7 +33,8 @@ Rules:
 - Skip any section where the data is absent.
 - Write like a strategist briefing a client, not like a report generator.
 - The data context includes a "Currency:" line. Use that exact currency symbol for all monetary values throughout your analysis — never substitute a different one.
-- If the data context includes a "SPECIFIC ANALYSIS REQUEST:" section, prioritise that angle throughout your analysis. Address it directly in the Executive Summary and give it the most weight in the relevant performance sections. Still follow the standard output structure, but make the requested focus the narrative thread.`;
+- If the data context includes a "SPECIFIC ANALYSIS REQUEST:" section, prioritise that angle throughout your analysis. Address it directly in the Executive Summary and give it the most weight in the relevant performance sections. Still follow the standard output structure, but make the requested focus the narrative thread.
+- CRITICAL — declared intent: If the data context starts with "DECLARED CAMPAIGN GOAL(S):", those are the campaign's actual goals as stated by the user before they uploaded any data. Treat them as ground truth. Judge success through those declared goals only. Do NOT infer the campaign goal from which metrics happen to be available. A conversion campaign can have impression data — that is delivery context, not a signal that the campaign is awareness. A declared awareness campaign should be judged on CPM, reach, and frequency even if conversion metrics are present. Limit your active sections to the ones matching the declared goals, and clearly note which goal each section addresses.`;
 
 export const runtime = 'nodejs';
 

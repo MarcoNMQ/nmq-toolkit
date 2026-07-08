@@ -8,6 +8,12 @@ import KpiMatrixPanel from './KpiMatrixPanel';
 
 type Step = 'upload' | 'ready' | 'generating' | 'done';
 
+const CAMPAIGN_PHASES = [
+  { key: 'awareness',     label: 'Awareness',       color: '#7F77DD', description: 'Brand visibility, reach, video views' },
+  { key: 'consideration', label: 'Consideration',   color: '#1D9E75', description: 'Clicks, CTR, engagement, traffic' },
+  { key: 'purchase',      label: 'Purchase / Lead', color: '#D85A30', description: 'Conversions, ROAS, CPA, CPL' },
+];
+
 const CLIENT_PROFILES: Record<string, { label: string; accentClass: string; analyses: string[] }> = {
   generic: {
     label: 'Generic',
@@ -229,7 +235,14 @@ export default function InsightsClient() {
   const [error, setError] = useState('');
   const [guideOpen, setGuideOpen] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [declaredPhases, setDeclaredPhases] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  function togglePhase(key: string) {
+    setDeclaredPhases((prev) =>
+      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]
+    );
+  }
 
   function toggleAnalysis(analysis: string) {
     setSelectedAnalyses((prev) =>
@@ -278,6 +291,12 @@ export default function InsightsClient() {
     abortRef.current = ctrl;
 
     try {
+      const contextParts: string[] = [];
+      if (declaredPhases.length) {
+        const phaseLabels = declaredPhases.map((k) => CAMPAIGN_PHASES.find((p) => p.key === k)?.label ?? k);
+        contextParts.push(`DECLARED CAMPAIGN GOAL(S): ${phaseLabels.join(', ')}`);
+      }
+      contextParts.push(summary.context);
       const focusParts: string[] = [];
       if (selectedAnalyses.length) {
         focusParts.push(`Focus areas: ${selectedAnalyses.join(', ')}`);
@@ -285,9 +304,10 @@ export default function InsightsClient() {
       if (customPrompt.trim()) {
         focusParts.push(customPrompt.trim());
       }
-      const contextWithPrompt = focusParts.length
-        ? `${summary.context}\n\nSPECIFIC ANALYSIS REQUEST:\n${focusParts.join('\n')}`
-        : summary.context;
+      if (focusParts.length) {
+        contextParts.push(`SPECIFIC ANALYSIS REQUEST:\n${focusParts.join('\n')}`);
+      }
+      const contextWithPrompt = contextParts.join('\n\n');
 
       const res = await fetch('/api/insights/generate', {
         method: 'POST',
@@ -325,6 +345,7 @@ export default function InsightsClient() {
     setInsightsText('');
     setCustomPrompt('');
     setSelectedAnalyses([]);
+    setDeclaredPhases([]);
     setError('');
   }
 
@@ -332,7 +353,8 @@ export default function InsightsClient() {
   if (step === 'upload') {
     return (
       <div className="h-full overflow-y-auto bg-white">
-        <div className="flex flex-col items-center justify-center min-h-full px-6 py-12">
+        <div className="mx-auto max-w-lg w-full px-6 py-12">
+          {/* Header */}
           <div className="mb-10 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
               <svg viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth={1.75} className="h-7 w-7">
@@ -342,10 +364,61 @@ export default function InsightsClient() {
             </div>
             <h1 className="text-3xl font-extrabold text-ink-900">AI Insight Generator</h1>
             <p className="mt-2 text-sm text-ink-500 max-w-md">
-              Upload any paid media export and Claude will read it and write you a full strategic analysis — no setup, no filters.
+              Upload any paid media export and Claude will write a full strategic analysis — scoped to your campaign goal.
             </p>
           </div>
-          <DataSourcePicker onData={handleData} />
+
+          {/* Step 1 — declare intent */}
+          <div className="mb-8">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">1</span>
+              <p className="text-sm font-bold text-ink-900">What was this campaign trying to achieve?</p>
+            </div>
+            <p className="mb-3 text-xs text-ink-400 pl-7">Select all that apply. This tells the AI how to judge the numbers — a conversion campaign that has impression data should be evaluated on ROAS, not reach.</p>
+            <div className="flex flex-col gap-2 pl-7">
+              {CAMPAIGN_PHASES.map((phase) => {
+                const active = declaredPhases.includes(phase.key);
+                return (
+                  <button
+                    key={phase.key}
+                    onClick={() => togglePhase(phase.key)}
+                    className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                      active
+                        ? 'border-transparent text-white shadow-sm'
+                        : 'border-ink-200 bg-white text-ink-700 hover:border-ink-300'
+                    }`}
+                    style={active ? { backgroundColor: phase.color, borderColor: phase.color } : {}}
+                  >
+                    <span className={`text-lg leading-none ${active ? 'opacity-100' : 'opacity-40'}`}>
+                      {phase.key === 'awareness' ? '🟣' : phase.key === 'consideration' ? '🟢' : '🟠'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold leading-tight">{phase.label}</p>
+                      <p className={`text-xs leading-tight mt-0.5 ${active ? 'opacity-80' : 'text-ink-400'}`}>{phase.description}</p>
+                    </div>
+                    {active && <span className="ml-auto text-sm font-bold opacity-80">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Step 2 — upload data (only shown once a goal is selected) */}
+          {declaredPhases.length > 0 ? (
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">2</span>
+                <p className="text-sm font-bold text-ink-900">Upload your data</p>
+              </div>
+              <div className="pl-7">
+                <DataSourcePicker onData={handleData} />
+              </div>
+            </div>
+          ) : (
+            <div className="pl-7 rounded-xl border border-dashed border-ink-200 bg-ink-50 px-5 py-4 text-center">
+              <p className="text-xs text-ink-400">Select a campaign goal above to unlock the data upload.</p>
+            </div>
+          )}
         </div>
       </div>
     );
