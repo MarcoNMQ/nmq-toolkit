@@ -93,7 +93,7 @@ Character limits are STRICT and HARD — count every character including spaces 
 - Long headlines: 90 characters maximum, no exceptions.
 - Descriptions: 90 characters maximum, no exceptions.
 
-Before submitting, count the length of every single string yourself. If a sentence doesn't fit, rewrite it shorter — do not submit anything over the limit and rely on it being cut off later. A complete shorter sentence is always better than a longer one that gets truncated.`,
+These limits apply equally in all languages. ${lang !== 'English' ? `${lang} words are often longer than English — write shorter, punchier phrases and avoid compound nouns that exceed the limit on their own. ` : ''}Before submitting, count the length of every single string yourself. If a sentence doesn't fit, rewrite it shorter — do not submit anything over the limit and rely on it being cut off later. A complete shorter sentence is always better than a longer one that gets truncated.`,
     },
   ];
 
