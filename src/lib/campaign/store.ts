@@ -156,6 +156,7 @@ interface BuilderState {
   addGoogleAd: (campaignId: string) => string;
   updateGoogleAd: (campaignId: string, adId: string, patch: Partial<GoogleAd>) => void;
   removeGoogleAd: (campaignId: string, adId: string) => void;
+  moveGoogleAd: (fromCampaignId: string, adId: string, toCampaignId: string) => void;
 
   addGoogleKeyword: (campaignId: string) => string;
   updateGoogleKeyword: (campaignId: string, keywordId: string, patch: Partial<GoogleKeyword>) => void;
@@ -269,6 +270,18 @@ export const useBuilderStore = create<BuilderState>()(
         c.id === campaignId ? { ...c, ads: c.ads.filter((a) => a.id !== adId) } : c,
       ),
     })),
+  moveGoogleAd: (fromCampaignId, adId, toCampaignId) =>
+    set((state) => {
+      const ad = state.googleCampaigns.find((c) => c.id === fromCampaignId)?.ads.find((a) => a.id === adId);
+      if (!ad) return state;
+      return {
+        googleCampaigns: state.googleCampaigns.map((c) => {
+          if (c.id === fromCampaignId) return { ...c, ads: c.ads.filter((a) => a.id !== adId) };
+          if (c.id === toCampaignId) return { ...c, ads: [...c.ads, ad] };
+          return c;
+        }),
+      };
+    }),
 
   addGoogleKeyword: (campaignId) => {
     const kw = newGoogleKeyword();

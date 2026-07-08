@@ -6,6 +6,10 @@ import { CharCount, Field, TextInput } from '@/components/Field';
 import { COUNTRY_LANGUAGE_MAP } from '@/lib/campaign/constants';
 import type { GoogleAd } from '@/lib/campaign/types';
 
+function truncate(s: string, max = 40): string {
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
 interface CopyResult {
   headlines: string[];
   longHeadlines: string[];
@@ -13,16 +17,32 @@ interface CopyResult {
 }
 
 export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: string }) {
-  const campaign = useBuilderStore((s) => s.googleCampaigns.find((c) => c.id === campaignId));
+  const allCampaigns = useBuilderStore((s) => s.googleCampaigns);
+  const campaign = allCampaigns.find((c) => c.id === campaignId);
   const ad = campaign?.ads.find((a) => a.id === adId);
   const updateAd = useBuilderStore((s) => s.updateGoogleAd);
   const removeAd = useBuilderStore((s) => s.removeGoogleAd);
+  const moveAd = useBuilderStore((s) => s.moveGoogleAd);
+  const setSelected = useBuilderStore((s) => s.setSelected);
   const [fetchingTitle, setFetchingTitle] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedLangs, setSelectedLangs] = useState<string[]>([]);
   const [langResults, setLangResults] = useState<Record<string, CopyResult>>({});
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const moveMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMoveMenu) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (moveMenuRef.current && !moveMenuRef.current.contains(e.target as Node)) {
+        setShowMoveMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMoveMenu]);
 
   if (!campaign || !ad) return null;
   const safeCampaign = campaign;
@@ -44,6 +64,14 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
   function patch(p: Partial<GoogleAd>) {
     updateAd(campaignId, adId, p);
   }
+
+  function handleMove(toCampaignId: string) {
+    moveAd(campaignId, adId, toCampaignId);
+    setSelected({ type: 'ad', campaignId: toCampaignId, adId });
+    setShowMoveMenu(false);
+  }
+
+  const otherCampaigns = allCampaigns.filter((c) => c.id !== campaignId);
 
   function toggleLang(lang: string) {
     setSelectedLangs((prev) =>
@@ -152,12 +180,48 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
       <div className="mx-auto max-w-5xl space-y-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">Ad</h2>
-          <button
-            onClick={() => removeAd(campaignId, adId)}
-            className="text-sm text-red-500 hover:underline"
-          >
-            Delete ad
-          </button>
+          <div className="flex items-center gap-3">
+            {otherCampaigns.length > 0 && (
+              <div className="relative" ref={moveMenuRef}>
+                <button
+                  onClick={() => setShowMoveMenu((v) => !v)}
+                  className="text-sm text-ink-500 hover:text-ink-800"
+                >
+                  Move to…
+                </button>
+                {showMoveMenu && (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-ink-200 bg-white shadow-lg overflow-hidden">
+                    <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-400 border-b border-ink-100">
+                      Move ad to campaign
+                    </p>
+                    <ul className="max-h-60 overflow-y-auto">
+                      {otherCampaigns.map((c) => (
+                        <li key={c.id}>
+                          <button
+                            onClick={() => handleMove(c.id)}
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm hover:bg-ink-50"
+                          >
+                            <span className="text-ink-800 leading-tight">
+                              {truncate(c.campaign_name || '(unnamed campaign)')}
+                            </span>
+                            <span className="shrink-0 text-xs text-ink-400">
+                              {c.ads.length} ad{c.ads.length !== 1 ? 's' : ''}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => removeAd(campaignId, adId)}
+              className="text-sm text-red-500 hover:underline"
+            >
+              Delete ad
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
