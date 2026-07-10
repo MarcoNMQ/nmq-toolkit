@@ -86,7 +86,7 @@ Product category: ${productCategory || 'n/a'}
 Product promoted: ${productPromoted || 'n/a'}
 Language: ${lang} — write every single string in ${lang}. Do not use English unless ${lang} IS English.
 
-Generate exactly 15 headlines, 5 long headlines, and 5 descriptions. Keep tone direct and benefit-led.
+Generate exactly 15 headlines, 5 long headlines, and 5 descriptions. Keep tone direct and benefit-led. Avoid clickbait — no exaggerated claims, no "You won't believe…" or "This will change your life" style phrasing, no false urgency. Copy must be honest and accurate to the product so it does not get flagged by Google Ads policies.
 
 Character limits are STRICT and HARD — count every character including spaces and punctuation:
 - Headlines: 30 characters maximum, no exceptions.
