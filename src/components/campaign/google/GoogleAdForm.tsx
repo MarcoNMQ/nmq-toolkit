@@ -32,6 +32,7 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
   const [langResults, setLangResults] = useState<Record<string, CopyResult>>({});
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const moveMenuRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!showMoveMenu) return;
@@ -72,6 +73,32 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
   }
 
   const otherCampaigns = allCampaigns.filter((c) => c.id !== campaignId);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const headlines     = Array.from({ length: 15 }, (_, i) => (safeAd[`headline_${i + 1}` as keyof GoogleAd] as string) ?? '');
+      const longHeadlines = Array.from({ length: 5  }, (_, i) => (safeAd[`long_headline_${i + 1}` as keyof GoogleAd] as string) ?? '');
+      const descriptions  = Array.from({ length: isSearch ? 4 : 5 }, (_, i) => (safeAd[`description_${i + 1}` as keyof GoogleAd] as string) ?? '');
+      const res = await fetch('/api/campaign/export-ad-copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adName: safeAd.ad_name, headlines, longHeadlines, descriptions, isSearch }),
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${(safeAd.ad_name || 'ad-copy').replace(/[^\w-]/g, '_').slice(0, 50)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // non-fatal — user will notice the download didn't happen
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function toggleLang(lang: string) {
     setSelectedLangs((prev) =>
@@ -181,6 +208,14 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">Ad</h2>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="text-sm text-ink-500 hover:text-ink-800 disabled:opacity-40"
+              title="Download ad copy as Excel"
+            >
+              {downloading ? 'Downloading…' : '⬇ Download'}
+            </button>
             {otherCampaigns.length > 0 && (
               <div className="relative" ref={moveMenuRef}>
                 <button
