@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
   const buffer = await wb.xlsx.writeBuffer();
   const safeName = (adName || 'ad-copy').replace(/[^\w-]/g, '_').slice(0, 50);
 
-  return new NextResponse(buffer as Buffer, {
+  return new NextResponse(new Uint8Array(buffer as ArrayBuffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${safeName}.xlsx"`,
