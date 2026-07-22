@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef } from 'react';
 import DataSourcePicker from '@/components/dashboard/DataSourcePicker';
+import { useClientsStore } from '@/lib/clients/store';
 import { detectColumns, applyMapping } from '@/lib/dashboard/columnDetect';
 import { aggregateKpis, buildBreakdown, applyFilters } from '@/lib/dashboard/aggregate';
 import { formatMetric } from '@/lib/dashboard/metrics';
@@ -15,20 +16,22 @@ const CAMPAIGN_PHASES = [
   { key: 'purchase',      label: 'Purchase / Lead', color: '#D85A30', description: 'Conversions, ROAS, CPA, CPL' },
 ];
 
-const CLIENT_PROFILES: Record<string, { label: string; accentClass: string; analyses: string[] }> = {
-  generic: {
-    label: 'Generic',
-    accentClass: 'bg-ink-800 text-white',
-    analyses: [
-      'Channel performance comparison',
-      'Period over period (week vs week)',
-      'Budget pacing',
-      'Top & bottom performers',
-      'Audience segment analysis',
-    ],
-  },
+// Curated per-client analysis presets, matched by client NAME (case-insensitive)
+// against the shared client roster (@/lib/clients/store) — the same roster
+// Campaign Builder's client picker uses. Any client without a curated preset
+// here (including newly-added ones like "Worldline") falls back to GENERIC_PRESET.
+const GENERIC_PRESET = {
+  accentClass: 'bg-ink-800 text-white',
+  analyses: [
+    'Channel performance comparison',
+    'Period over period (week vs week)',
+    'Budget pacing',
+    'Top & bottom performers',
+    'Audience segment analysis',
+  ],
+};
+const CURATED_PRESETS: Record<string, { accentClass: string; analyses: string[] }> = {
   rituals: {
-    label: 'Rituals',
     accentClass: 'bg-amber-500 text-white',
     analyses: [
       'Creative A vs B performance',
@@ -40,7 +43,6 @@ const CLIENT_PROFILES: Record<string, { label: string; accentClass: string; anal
     ],
   },
   lineage: {
-    label: 'Lineage',
     accentClass: 'bg-sky-600 text-white',
     analyses: [
       'MQL performance',
@@ -60,6 +62,11 @@ interface DataSummary {
   markets: string[];
   hasFunnelData: boolean;
   context: string;
+  // Set when the file loaded structurally but looks unusable — e.g. no
+  // columns matched a known metric, or every core metric came out zero
+  // (a strong signal the export is campaign-setup/metadata, not performance
+  // data). Shown as a visible banner instead of silently proceeding.
+  warning?: string;
 }
 
 function detectCurrency(rows: Record<string, string>[]): { symbol: string; code: string } {
@@ -90,6 +97,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
       markets: [],
       hasFunnelData: false,
       context: `Raw data — none of the columns matched a known paid-media field, showing ${previewCount} of ${rows.length} rows verbatim (columns: ${columns.join(', ')}):\n${sampleLines.join('\n')}`,
+      warning: `None of the ${columns.length} column${columns.length === 1 ? '' : 's'} in this file matched a known metric or dimension name (impressions, spend, clicks, conversions, campaign, channel…). This usually means the wrong sheet/report was exported (e.g. a campaign-setup export instead of a performance report), or the header row wasn't detected. The analysis below may be unreliable — check the source file before relying on it.`,
     };
   }
 
@@ -184,6 +192,11 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
     }
   }
 
+  // Columns mapped fine, but if every core volume metric is zero across every
+  // row, this is almost certainly the wrong report (e.g. a campaign-setup
+  // export where the real KPI columns were blank/text and got coerced to 0).
+  const hasAnySignal = totals.impressions > 0 || totals.spend > 0 || totals.clicks > 0 || (totals.conversions ?? 0) > 0;
+
   return {
     rowCount: adRows.length,
     dateRange,
@@ -191,6 +204,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
     markets,
     hasFunnelData,
     context: lines.join('\n'),
+    warning: hasAnySignal ? undefined : `${adRows.length} row${adRows.length === 1 ? '' : 's'} loaded, but Impressions, Spend, Clicks, and Conversions are all zero across every row. This usually means the wrong report/date range was exported (e.g. campaign-setup metadata rather than performance results). Check the source file before generating insights.`,
   };
 }
 
@@ -241,6 +255,17 @@ const SECTION_COLORS: Record<string, string> = {
 };
 
 export default function InsightsClient() {
+  const clients = useClientsStore((s) => s.clients);
+  const addClient = useClientsStore((s) => s.addClient);
+  const clientTabs = [
+    { key: 'generic', label: 'Generic', ...GENERIC_PRESET },
+    ...clients.map((c) => ({
+      key: c.id,
+      label: c.name,
+      ...(CURATED_PRESETS[c.name.toLowerCase()] ?? GENERIC_PRESET),
+    })),
+  ];
+
   const [step, setStep] = useState<Step>('upload');
   const [summary, setSummary] = useState<DataSummary | null>(null);
   const [deepMode, setDeepMode] = useState(false);
@@ -446,6 +471,12 @@ export default function InsightsClient() {
       <div className="h-full overflow-y-auto bg-ink-50">
         <div className="mx-auto max-w-6xl w-full px-6 py-12 flex gap-5 items-start">
           <div className="flex-1 min-w-0">
+          {summary.warning && (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-bold">⚠ This file may not be usable</p>
+              <p className="mt-1">{summary.warning}</p>
+            </div>
+          )}
           <div className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-base font-bold text-ink-900">Data loaded</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -472,12 +503,12 @@ export default function InsightsClient() {
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-400">Client</p>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(CLIENT_PROFILES).map(([key, profile]) => (
+                {clientTabs.map((profile) => (
                   <button
-                    key={key}
-                    onClick={() => switchClient(key)}
+                    key={profile.key}
+                    onClick={() => switchClient(profile.key)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                      selectedClient === key
+                      selectedClient === profile.key
                         ? profile.accentClass
                         : 'border border-ink-200 text-ink-500 hover:border-ink-400 hover:text-ink-700'
                     }`}
@@ -485,6 +516,16 @@ export default function InsightsClient() {
                     {profile.label}
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    const name = window.prompt('New client name:');
+                    const entry = name ? addClient(name) : null;
+                    if (entry) switchClient(entry.id);
+                  }}
+                  className="rounded-lg border border-dashed border-ink-300 px-3 py-1.5 text-xs font-semibold text-ink-500 hover:border-brand-400 hover:text-brand-600"
+                >
+                  + Add client
+                </button>
               </div>
             </div>
 
@@ -494,7 +535,7 @@ export default function InsightsClient() {
                 Analysis type <span className="normal-case font-normal text-ink-300">(pick one or more)</span>
               </p>
               <div className="flex flex-wrap gap-2">
-                {CLIENT_PROFILES[selectedClient].analyses.map((analysis) => {
+                {(clientTabs.find((p) => p.key === selectedClient)?.analyses ?? GENERIC_PRESET.analyses).map((analysis) => {
                   const active = selectedAnalyses.includes(analysis);
                   return (
                     <button

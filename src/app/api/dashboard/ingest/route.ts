@@ -77,11 +77,42 @@ function decodeBuffer(buffer: ArrayBuffer): string {
 }
 
 // Skip platform metadata rows (LinkedIn, Meta, Google Ads exports put 3-5 header lines
-// before the actual column row). Find the first line that contains known data keywords.
+// before the actual column row). Find the header row by requiring SEVERAL cells to look
+// like known column names — not just one keyword hit anywhere in the raw line text.
+//
+// The naive version of this (matching the keyword regex against the whole line) breaks on
+// real LinkedIn Campaign Manager exports: their metadata block includes lines like
+// "Date range: 2026-06-01 to 2026-06-30" or "Campaign Group: ..." — both contain "date" or
+// "campaign" and would get picked as the "header" over the real one (e.g. "Campaign
+// Name<TAB>Campaign Group<TAB>Start Date<TAB>End Date<TAB>Impressions<TAB>Clicks<TAB>...").
 const DATA_HEADER_RE = /\b(impression|click|spend|cost|date|campaign|channel|market|ctr|cpc|cpm|conv|roas|reach|view|video|engag|start|end|name)\b/i;
+
+function guessDelimiter(line: string): string {
+  const tabCount = (line.match(/\t/g) ?? []).length;
+  const commaCount = (line.match(/,/g) ?? []).length;
+  return tabCount > commaCount ? '\t' : ',';
+}
+
 function skipMetadataRows(text: string): string {
   const lines = text.split(/\r?\n/);
-  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+  const scanLimit = Math.min(lines.length, 20);
+
+  // Pass 1 (strict): the real header row of a delimited export has several
+  // cells, each a short column name — require ≥3 matching cells (or ≥40% of
+  // them) so a single metadata line mentioning "date" or "campaign" in prose
+  // can't be mistaken for it.
+  for (let i = 0; i < scanLimit; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const cells = line.split(guessDelimiter(line)).map((c) => c.trim()).filter(Boolean);
+    if (cells.length < 3) continue;
+    const matches = cells.filter((c) => DATA_HEADER_RE.test(c)).length;
+    if (matches >= 3 || matches / cells.length >= 0.4) return lines.slice(i).join('\n');
+  }
+
+  // Pass 2 (fallback): the old loose single-keyword-anywhere-in-line check,
+  // in case a legitimate export doesn't fit the "several short cells" shape.
+  for (let i = 0; i < scanLimit; i++) {
     if (DATA_HEADER_RE.test(lines[i])) return lines.slice(i).join('\n');
   }
   return text;

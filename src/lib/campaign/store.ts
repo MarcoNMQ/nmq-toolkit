@@ -35,7 +35,10 @@ export function newGoogleCampaign(): GoogleCampaign {
     main_goal: '',
     perf_goal: '',
     month: '',
-    client_profile: 'Shimano',
+    // Blank by default — never silently pre-select a client. The form
+    // already falls back to free-text product fields when no known client
+    // taxonomy exists (see GoogleCampaignForm.tsx's `clientTaxonomy ?` branch).
+    client_profile: '',
     product_category: '',
     product_subcategory: '',
     product_promoted: '',

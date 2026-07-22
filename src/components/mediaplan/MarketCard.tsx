@@ -24,7 +24,10 @@ export function MarketCard({ scenario, market, audience, industry }: { scenario:
         <button onClick={() => toggleMarketExpanded(scenario.id, market.market)} className="text-ink-400">
           {market.expanded ? '▾' : '▸'}
         </button>
-        <span className="text-sm font-bold text-ink-900">{MARKET_LABELS[market.market] ?? market.market} ({market.market})</span>
+        <span className="text-sm font-bold text-ink-900">
+          {MARKET_LABELS[market.market] ?? market.market}
+          {MARKET_LABELS[market.market] ? ` (${market.market})` : ''}
+        </span>
 
         <label className="flex items-center gap-1 text-xs text-ink-500">
           %

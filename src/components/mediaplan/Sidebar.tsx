@@ -2,8 +2,10 @@
 
 import { useRef, useState } from 'react';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
+import { useSavedPlansStore } from '@/lib/mediaplan/savedPlansStore';
 import { importLegacyPlan, isLegacyPlanFile } from '@/lib/mediaplan/legacyImport';
 import { Field, Select, TextInput } from '@/components/Field';
+import { SavedPlansModal } from '@/components/mediaplan/SavedPlansModal';
 
 export function Sidebar() {
   const plan = useMediaPlanStore((s) => s.plan);
@@ -20,9 +22,25 @@ export function Sidebar() {
   const mobileSidebarOpen = useMediaPlanStore((s) => s.mobileSidebarOpen);
   const setMobileSidebarOpen = useMediaPlanStore((s) => s.setMobileSidebarOpen);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [showSavedPlans, setShowSavedPlans] = useState(false);
+  const [currentSavedPlanId, setCurrentSavedPlanId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const savedPlans = useSavedPlansStore((s) => s.savedPlans);
+  const savePlan = useSavedPlansStore((s) => s.savePlan);
 
-  function savePlanJson() {
+  function saveNamedPlan() {
+    const existing = currentSavedPlanId ? savedPlans.find((p) => p.id === currentSavedPlanId) : undefined;
+    const defaultName = existing?.name ?? plan.campaignName ?? 'Untitled Plan';
+    const name = window.prompt('Plan name:', defaultName);
+    if (!name?.trim()) return;
+    const id = savePlan(name.trim(), plan, scenarios, undefined, currentSavedPlanId ?? undefined);
+    setCurrentSavedPlanId(id);
+  }
+
+  // Legacy .json file export — kept as a secondary path (e.g. for sharing a
+  // plan outside the app or backing it up), separate from the named
+  // saved-plans library above, which is now the primary save mechanism.
+  function exportPlanJson() {
     const blob = new Blob([JSON.stringify({ plan, scenarios }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -37,10 +55,12 @@ export function Sidebar() {
       const data = JSON.parse(await file.text());
       if (isLegacyPlanFile(data)) {
         loadPlan(importLegacyPlan(data));
+        setCurrentSavedPlanId(null);
         return;
       }
       if (!data.plan || !Array.isArray(data.scenarios)) throw new Error('Not a valid media plan file.');
       loadPlan(data);
+      setCurrentSavedPlanId(null);
     } catch (e) {
       window.alert(`Couldn't load this file: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -104,10 +124,10 @@ export function Sidebar() {
           </button>
         </div>
         <div className="flex gap-2 text-xs">
-          <button onClick={savePlanJson} disabled={scenarios.length === 0} className="flex-1 rounded-md border border-ink-200 py-1 font-semibold text-ink-600 hover:bg-ink-50 disabled:opacity-40">
+          <button onClick={saveNamedPlan} disabled={scenarios.length === 0} className="flex-1 rounded-md border border-ink-200 py-1 font-semibold text-ink-600 hover:bg-ink-50 disabled:opacity-40">
             💾 Save plan
           </button>
-          <button onClick={() => fileInputRef.current?.click()} className="flex-1 rounded-md border border-ink-200 py-1 font-semibold text-ink-600 hover:bg-ink-50">
+          <button onClick={() => setShowSavedPlans(true)} className="flex-1 rounded-md border border-ink-200 py-1 font-semibold text-ink-600 hover:bg-ink-50">
             📂 Load plan
           </button>
           <input
@@ -118,6 +138,22 @@ export function Sidebar() {
             onChange={(e) => { if (e.target.files?.[0]) loadPlanJson(e.target.files[0]); e.target.value = ''; }}
           />
         </div>
+        {scenarios.length > 0 && (
+          <button onClick={exportPlanJson} className="mt-1.5 text-[11px] font-medium text-ink-400 hover:text-ink-600 hover:underline">
+            Export as .json file…
+          </button>
+        )}
+        {showSavedPlans && (
+          <SavedPlansModal
+            onClose={() => setShowSavedPlans(false)}
+            onImportFile={() => fileInputRef.current?.click()}
+            onLoad={(id, data) => {
+              loadPlan(data);
+              setCurrentSavedPlanId(id);
+              setShowSavedPlans(false);
+            }}
+          />
+        )}
       </div>
 
       <div className="space-y-3 border-b border-ink-100 p-4">
@@ -223,7 +259,7 @@ export function Sidebar() {
         ))}
         <button
           onClick={() => {
-            if (window.confirm('Clear all scenarios and plan config? This cannot be undone.')) clearAll();
+            if (window.confirm('Clear all scenarios and plan config? This cannot be undone.')) { clearAll(); setCurrentSavedPlanId(null); }
           }}
           className="mt-2 w-full text-xs font-medium text-ink-400 hover:text-red-500 hover:underline"
         >

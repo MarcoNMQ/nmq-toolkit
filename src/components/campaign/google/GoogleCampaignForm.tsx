@@ -7,8 +7,9 @@ import {
   CHANNELS, MAIN_GOALS, PERF_GOALS,
   MARKETS, MONTHS, CTAS, BID_STRATEGIES, COUNTRY_OPTIONS, MARKET_TO_GROUP,
   COUNTRY_GROUP_PRESETS, COUNTRY_GROUPS, NETWORK_OPTIONS, LANGUAGE_OPTIONS,
-  COUNTRY_LANGUAGE_MAP, CLIENT_PROFILES, CLIENT_TAXONOMIES,
+  COUNTRY_LANGUAGE_MAP, CLIENT_TAXONOMIES,
 } from '@/lib/campaign/constants';
+import { useClientsStore } from '@/lib/clients/store';
 import { Field, MultiToggle, Select, TextInput } from '@/components/Field';
 import { BriefingImportPanel } from '@/components/campaign/BriefingImportPanel';
 import { getConventionForClient } from '@/lib/campaign/naming/templates';
@@ -25,6 +26,9 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
   const addGoogleSitelink = useBuilderStore((s) => s.addGoogleSitelink);
   const updateGoogleSitelink = useBuilderStore((s) => s.updateGoogleSitelink);
   const removeGoogleSitelink = useBuilderStore((s) => s.removeGoogleSitelink);
+  const clients = useClientsStore((s) => s.clients);
+  const addClient = useClientsStore((s) => s.addClient);
+  const removeClient = useClientsStore((s) => s.removeClient);
 
   // Keep computed names in sync whenever the inputs that feed them change.
   // Skips on the first fire after a briefing import (name_locked = true) —
@@ -147,15 +151,42 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
 
       <Field
         label="For which client are you setting up the campaign?"
-        hint="Leave blank for free-text product fields. Picking a known client switches Product category/family/promoted to that client's fixed naming convention."
+        hint="Leave blank for free-text product fields. Picking a client with a defined product taxonomy (currently just Shimano) switches Product category/family/promoted to that client's fixed naming convention — any other client uses free-text fields."
       >
-        <Select
-          value={campaign.client_profile}
-          onChange={(e) => patch({ client_profile: e.target.value, product_category: '', product_subcategory: '', product_promoted: '' })}
-        >
-          <option value="">— None —</option>
-          {CLIENT_PROFILES.map((c) => <option key={c}>{c}</option>)}
-        </Select>
+        <div className="flex gap-2">
+          <Select
+            value={campaign.client_profile}
+            onChange={(e) => {
+              if (e.target.value === '__add__') {
+                const name = window.prompt('New client name:');
+                const entry = name ? addClient(name) : null;
+                if (entry) patch({ client_profile: entry.name, product_category: '', product_subcategory: '', product_promoted: '' });
+                return;
+              }
+              patch({ client_profile: e.target.value, product_category: '', product_subcategory: '', product_promoted: '' });
+            }}
+          >
+            <option value="">— None —</option>
+            {clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            <option value="__add__">+ Add new client…</option>
+          </Select>
+          {campaign.client_profile && !CLIENT_TAXONOMIES[campaign.client_profile] && (
+            <button
+              type="button"
+              title={`Remove "${campaign.client_profile}" from the client list`}
+              onClick={() => {
+                const entry = clients.find((c) => c.name === campaign.client_profile);
+                if (entry && window.confirm(`Remove "${entry.name}" from the client list?`)) {
+                  removeClient(entry.id);
+                  patch({ client_profile: '', product_category: '', product_subcategory: '', product_promoted: '' });
+                }
+              }}
+              className="rounded-md border border-ink-200 px-2 text-xs text-ink-400 hover:border-red-300 hover:text-red-500"
+            >
+              🗑
+            </button>
+          )}
+        </div>
       </Field>
 
       <div className="grid grid-cols-3 gap-4">
