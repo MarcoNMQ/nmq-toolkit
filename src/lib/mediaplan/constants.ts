@@ -198,13 +198,13 @@ export const PHASE_COLS: Record<string, string[]> = {
   'LinkedIn_SM|Traffic': ['Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr'],
   'LinkedIn_SM|Conversion': [
     'Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr',
-    'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql', 'mql_to_sql', 'sql', 'cost_per_sql',
+    'conv_rate', 'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql', 'mql_to_sql', 'sql', 'cost_per_sql',
   ],
   'LinkedIn_CA|Awareness': ['Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr'],
   'LinkedIn_CA|Traffic': ['Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr'],
   'LinkedIn_CA|Conversion': [
     'Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr',
-    'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql', 'mql_to_sql', 'sql', 'cost_per_sql',
+    'conv_rate', 'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql', 'mql_to_sql', 'sql', 'cost_per_sql',
   ],
   'LinkedIn_DA|Awareness': ['Budget', 'impressions', 'eff_cpm', 'clicks', 'ctr', 'form_completions', 'form_completion_rate'],
   'LinkedIn_DA|Traffic': ['Budget', 'impressions', 'eff_cpm', 'clicks', 'ctr', 'form_completions', 'form_completion_rate'],

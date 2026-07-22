@@ -38,6 +38,12 @@ export type BenchmarkField = keyof Benchmark;
 // One channel's settings within a (market, goal) — its budget split %,
 // benchmark assumptions, and (LinkedIn only) format.
 export interface ChannelConfig {
+  // Stable identity for this entry — required because a goal can hold more
+  // than one instance of the same channel (e.g. two separate LinkedIn line
+  // items, one Sponsored Message and one Lead Gen Form, both under the same
+  // goal). All per-channel store actions target by id, never by `channel`
+  // name, so duplicates never collide or get updated together.
+  id: string;
   channel: Channel;
   splitPct: number;
   benchmark: Benchmark;

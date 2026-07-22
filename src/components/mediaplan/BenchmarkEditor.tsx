@@ -32,7 +32,7 @@ export function BenchmarkEditor({
       });
       if (!res.ok) throw new Error(await res.text());
       const values: Record<string, number> = await res.json();
-      Object.entries(values).forEach(([f, v]) => setField(scenarioId, market, goal, channel, f, v));
+      Object.entries(values).forEach(([f, v]) => setField(scenarioId, market, goal, channelConfig.id, f, v));
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -50,7 +50,7 @@ export function BenchmarkEditor({
               key={p}
               type="button"
               disabled={aiLoading}
-              onClick={() => applyPreset(scenarioId, market, goal, channel, p)}
+              onClick={() => applyPreset(scenarioId, market, goal, channelConfig.id, p)}
               className="rounded-full border border-ink-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink-600 hover:bg-ink-100 disabled:opacity-40"
               title={`Apply ${p} preset (static multiplier on market defaults)`}
             >
@@ -83,7 +83,7 @@ export function BenchmarkEditor({
                 value={display}
                 onChange={(e) => {
                   const v = parseFloat(e.target.value) || 0;
-                  setField(scenarioId, market, goal, channel, f, isPct ? v / 100 : v);
+                  setField(scenarioId, market, goal, channelConfig.id, f, isPct ? v / 100 : v);
                 }}
                 className="rounded-md border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500"
               />

@@ -1,4 +1,5 @@
 import { ALL_GOALS, BENCH_IS_PCT } from './constants';
+import { uid } from './store';
 import type { Benchmark, BenchmarkField, Channel, ChannelConfig, Goal, GoalConfig, LinkedInFormat, MarketConfig, PlanConfig, Scenario } from './types';
 
 // Converts a plan exported from the OLD Streamlit media plan tool (flat
@@ -87,7 +88,7 @@ export function importLegacyPlan(raw: Record<string, unknown>): { plan: PlanConf
               benchmark[field] = BENCH_IS_PCT.has(field) ? v / 100 : v;
             }
           });
-          return { channel, splitPct: splitPcts[channel] ?? 0, benchmark, liFormat };
+          return { id: uid(), channel, splitPct: splitPcts[channel] ?? 0, benchmark, liFormat };
         });
 
         return { goal, goalPct, channels: channelConfigs };

@@ -18,10 +18,16 @@ export function ChannelSection({
   const plan = useMediaPlanStore((s) => s.plan);
   const setChannelSplitPct = useMediaPlanStore((s) => s.setChannelSplitPct);
   const setChannelLiFormat = useMediaPlanStore((s) => s.setChannelLiFormat);
+  const removeChannelInstance = useMediaPlanStore((s) => s.removeChannelInstance);
   const channelConfig = goal.channels[channelIndex];
 
   const budget = channelBudget(scenario, market, goal, channelConfig.splitPct);
   const convRate = channelConfig.benchmark.conv_rate ?? 0.02;
+
+  // Instance label ("#1", "#2") only shown once a channel type appears more
+  // than once in this goal — e.g. two separate LinkedIn line items.
+  const sameTypeInstances = goal.channels.filter((c) => c.channel === channelConfig.channel);
+  const instanceNumber = sameTypeInstances.length > 1 ? sameTypeInstances.indexOf(channelConfig) + 1 : null;
 
   const rows = useMemo(
     () => {
@@ -36,11 +42,13 @@ export function ChannelSection({
     <div className="space-y-2 rounded-md border border-ink-200 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-ink-900">{channelConfig.channel}</span>
+          <span className="text-sm font-bold text-ink-900">
+            {channelConfig.channel}{instanceNumber !== null && ` #${instanceNumber}`}
+          </span>
           {channelConfig.channel === 'LinkedIn' && (
             <Select
               value={channelConfig.liFormat ?? 'Static'}
-              onChange={(e) => setChannelLiFormat(scenario.id, market.market, goal.goal, e.target.value as LinkedInFormat)}
+              onChange={(e) => setChannelLiFormat(scenario.id, market.market, goal.goal, channelConfig.id, e.target.value as LinkedInFormat)}
               className="text-xs"
             >
               {LI_FORMATS.map((f) => <option key={f}>{f}</option>)}
@@ -52,10 +60,20 @@ export function ChannelSection({
               <input
                 type="number"
                 value={channelConfig.splitPct}
-                onChange={(e) => setChannelSplitPct(scenario.id, market.market, goal.goal, channelConfig.channel, parseFloat(e.target.value) || 0)}
+                onChange={(e) => setChannelSplitPct(scenario.id, market.market, goal.goal, channelConfig.id, parseFloat(e.target.value) || 0)}
                 className="w-16 rounded-md border border-ink-200 px-1.5 py-0.5 text-xs"
               />
             </label>
+          )}
+          {sameTypeInstances.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeChannelInstance(scenario.id, market.market, goal.goal, channelConfig.id)}
+              className="rounded-md px-1.5 py-0.5 text-xs font-bold text-red-400 hover:bg-red-50 hover:text-red-600"
+              title={`Remove this ${channelConfig.channel} line item`}
+            >
+              ✕
+            </button>
           )}
         </div>
         <span className="text-xs font-bold text-mint-600">€{budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>

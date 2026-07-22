@@ -4,12 +4,13 @@ import { BENCH, BENCH_PRESET_FACTORS, BENCH_FIELDS, channelKeyFor, type PlanTemp
 import { pctFromMarketBudget } from './budgets';
 import type { AiChatKind, Channel, ChannelConfig, ChatMessage, GoalConfig, LinkedInFormat, MarketConfig, PlanConfig, Scenario } from './types';
 
-function uid(): string {
+export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
 function newChannelConfig(market: string, channel: Channel, splitPct = 100): ChannelConfig {
   return {
+    id: uid(),
     channel,
     splitPct,
     benchmark: { ...(BENCH[market]?.[channel] ?? {}) },
@@ -73,10 +74,12 @@ interface MediaPlanState {
   setGoalPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], pct: number) => void;
 
   setGoalChannels: (scenarioId: string, market: string, goal: GoalConfig['goal'], channels: Channel[]) => void;
-  setChannelSplitPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], channel: Channel, pct: number) => void;
-  setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channel: Channel, field: string, value: number) => void;
-  setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], format: LinkedInFormat) => void;
-  applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channel: Channel, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
+  addChannelInstance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channel: Channel) => void;
+  removeChannelInstance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string) => void;
+  setChannelSplitPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
+  setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number) => void;
+  setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
+  applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
 
   // AI chat — global to the plan, not per-scenario (mirrors media_plan.py:
   // insights_chat / recs_chat / bench_chat are flat session keys, not
@@ -209,6 +212,10 @@ export const useMediaPlanStore = create<MediaPlanState>()(
 
       setGoalChannels: (scenarioId, market, goal, channels) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => {
+          // Toggling a channel type off removes ALL instances of that type;
+          // toggling one on adds a single fresh instance. Existing instances
+          // (including extra ones added via addChannelInstance) are kept as
+          // long as their type is still present in `channels`.
           const kept = g.channels.filter((c) => channels.includes(c.channel));
           const added = channels.filter((c) => !g.channels.some((existing) => existing.channel === c)).map((c) => newChannelConfig(market, c));
           const next = [...kept, ...added];
@@ -217,21 +224,37 @@ export const useMediaPlanStore = create<MediaPlanState>()(
         }))),
       })),
 
-      setChannelSplitPct: (scenarioId, market, goal, channel, pct) => set((state) => ({
+      addChannelInstance: (scenarioId, market, goal, channel) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => {
+          const next = [...g.channels, newChannelConfig(market, channel)];
+          const pct = evenSplit(next.length);
+          return { ...g, channels: next.map((c) => ({ ...c, splitPct: pct })) };
+        }))),
+      })),
+
+      removeChannelInstance: (scenarioId, market, goal, channelId) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => {
+          const next = g.channels.filter((c) => c.id !== channelId);
+          const pct = evenSplit(next.length);
+          return { ...g, channels: next.map((c) => ({ ...c, splitPct: pct })) };
+        }))),
+      })),
+
+      setChannelSplitPct: (scenarioId, market, goal, channelId, pct) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
           ...g,
-          channels: g.channels.map((c) => (c.channel === channel ? { ...c, splitPct: pct } : c)),
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, splitPct: pct } : c)),
         })))),
       })),
 
-      setChannelBenchmarkField: (scenarioId, market, goal, channel, field, value) => set((state) => ({
+      setChannelBenchmarkField: (scenarioId, market, goal, channelId, field, value) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
           ...g,
-          channels: g.channels.map((c) => (c.channel === channel ? { ...c, benchmark: { ...c.benchmark, [field]: value } } : c)),
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, benchmark: { ...c.benchmark, [field]: value } } : c)),
         })))),
       })),
 
-      setChannelLiFormat: (scenarioId, market, goal, format) => set((state) => ({
+      setChannelLiFormat: (scenarioId, market, goal, channelId, format) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
           ...g,
           // Changing format clears the old benchmark — different formats
@@ -239,20 +262,20 @@ export const useMediaPlanStore = create<MediaPlanState>()(
           // means "cost per send" for Sponsored Message), so stale values
           // would silently misrepresent the new format's assumptions.
           // Mirrors _clear_li_bench_keys() in media_plan.py.
-          channels: g.channels.map((c) => (c.channel === 'LinkedIn' ? { ...c, liFormat: format, benchmark: { ...(BENCH[market]?.LinkedIn ?? {}) } } : c)),
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, liFormat: format, benchmark: { ...(BENCH[market]?.LinkedIn ?? {}) } } : c)),
         })))),
       })),
 
-      applyBenchPreset: (scenarioId, market, goal, channel, preset) => set((state) => {
+      applyBenchPreset: (scenarioId, market, goal, channelId, preset) => set((state) => {
         const factors = BENCH_PRESET_FACTORS[preset];
         return {
           scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
             ...g,
             channels: g.channels.map((c) => {
-              if (c.channel !== channel) return c;
+              if (c.id !== channelId) return c;
               const liKey = channelKeyFor(c.channel, c.liFormat);
               const fields = BENCH_FIELDS[`${liKey}|${goal}`] ?? [];
-              const base = BENCH[market]?.[channel] ?? {};
+              const base = BENCH[market]?.[c.channel] ?? {};
               const benchmark = { ...c.benchmark };
               fields.forEach((f) => {
                 const baseValue = base[f];
@@ -292,7 +315,19 @@ export const useMediaPlanStore = create<MediaPlanState>()(
 
       loadPlan: (data) => set({
         plan: data.plan,
-        scenarios: data.scenarios,
+        // Backfill channel ids for plan files saved before this field existed
+        // (the persist `migrate` above only runs on localStorage rehydration,
+        // not on an explicit file import).
+        scenarios: data.scenarios.map((s) => ({
+          ...s,
+          markets: s.markets.map((m) => ({
+            ...m,
+            goals: m.goals.map((g) => ({
+              ...g,
+              channels: g.channels.map((c) => ({ ...c, id: c.id ?? uid() })),
+            })),
+          })),
+        })),
         activeScenarioId: data.scenarios[0]?.id ?? '',
       }),
 
@@ -303,6 +338,29 @@ export const useMediaPlanStore = create<MediaPlanState>()(
     }),
     {
       name: 'nmq-media-plan-builder-store',
+      version: 1,
+      // v0 → v1: ChannelConfig gained a stable `id` (needed so a goal can hold
+      // multiple instances of the same channel, e.g. two LinkedIn line items).
+      // Plans saved before this change have channels with no `id` at all —
+      // backfill one so every per-channel store action (which now targets by
+      // id, not by channel name) can still find them.
+      migrate: (persistedState) => {
+        const state = persistedState as { plan: PlanConfig; scenarios: Scenario[]; activeScenarioId: string };
+        if (!state?.scenarios) return state;
+        return {
+          ...state,
+          scenarios: state.scenarios.map((s) => ({
+            ...s,
+            markets: s.markets.map((m) => ({
+              ...m,
+              goals: m.goals.map((g) => ({
+                ...g,
+                channels: g.channels.map((c) => ({ ...c, id: c.id ?? uid() })),
+              })),
+            })),
+          })),
+        };
+      },
       partialize: (state) => ({
         plan: state.plan, scenarios: state.scenarios, activeScenarioId: state.activeScenarioId,
       }),

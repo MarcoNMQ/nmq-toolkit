@@ -10,8 +10,13 @@ import type { Channel, GoalConfig, MarketConfig, Scenario } from '@/lib/mediapla
 export function GoalSection({ scenario, market, goal, audience, industry }: { scenario: Scenario; market: MarketConfig; goal: GoalConfig; audience: string; industry: string }) {
   const setGoalChannels = useMediaPlanStore((s) => s.setGoalChannels);
   const setGoalPct = useMediaPlanStore((s) => s.setGoalPct);
+  const addChannelInstance = useMediaPlanStore((s) => s.addChannelInstance);
 
   const budget = goalBudget(scenario, market, goal);
+  // Channel types currently present at least once — each gets an "add another"
+  // affordance so e.g. LinkedIn can run as two separate line items (one
+  // Sponsored Message, one Lead Gen Form) within the same goal.
+  const presentChannelTypes = [...new Set(goal.channels.map((c) => c.channel))];
 
   return (
     <div className="space-y-2 rounded-md border border-ink-100 bg-white p-3">
@@ -35,13 +40,29 @@ export function GoalSection({ scenario, market, goal, audience, industry }: { sc
 
       <MultiToggle
         options={[...ALL_CHANNELS]}
-        values={goal.channels.map((c) => c.channel)}
+        values={presentChannelTypes}
         onChange={(v) => setGoalChannels(scenario.id, market.market, goal.goal, v as Channel[])}
       />
 
+      {presentChannelTypes.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {presentChannelTypes.map((ch) => (
+            <button
+              key={ch}
+              type="button"
+              onClick={() => addChannelInstance(scenario.id, market.market, goal.goal, ch)}
+              className="rounded-md border border-dashed border-ink-300 px-2 py-1 text-xs font-semibold text-ink-500 hover:border-brand-400 hover:text-brand-600"
+              title={`Add another ${ch} line item under this goal — e.g. a second LinkedIn entry with a different format`}
+            >
+              + Add another {ch}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2">
-        {goal.channels.map((_, i) => (
-          <ChannelSection key={goal.channels[i].channel} scenario={scenario} market={market} goal={goal} channelIndex={i} audience={audience} industry={industry} />
+        {goal.channels.map((c, i) => (
+          <ChannelSection key={c.id} scenario={scenario} market={market} goal={goal} channelIndex={i} audience={audience} industry={industry} />
         ))}
       </div>
     </div>
