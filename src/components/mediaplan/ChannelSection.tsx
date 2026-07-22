@@ -16,7 +16,7 @@ export function ChannelSection({
   scenario, market, goal, channelIndex, audience, industry,
 }: { scenario: Scenario; market: MarketConfig; goal: GoalConfig; channelIndex: number; audience: string; industry: string }) {
   const plan = useMediaPlanStore((s) => s.plan);
-  const setChannelSplitPct = useMediaPlanStore((s) => s.setChannelSplitPct);
+  const setChannelSplitPctAndRebalance = useMediaPlanStore((s) => s.setChannelSplitPctAndRebalance);
   const setChannelLiFormat = useMediaPlanStore((s) => s.setChannelLiFormat);
   const removeChannelInstance = useMediaPlanStore((s) => s.removeChannelInstance);
   const channelConfig = goal.channels[channelIndex];
@@ -60,7 +60,7 @@ export function ChannelSection({
               <input
                 type="number"
                 value={channelConfig.splitPct}
-                onChange={(e) => setChannelSplitPct(scenario.id, market.market, goal.goal, channelConfig.id, parseFloat(e.target.value) || 0)}
+                onChange={(e) => setChannelSplitPctAndRebalance(scenario.id, market.market, goal.goal, channelConfig.id, parseFloat(e.target.value) || 0)}
                 className="w-16 rounded-md border border-ink-200 px-1.5 py-0.5 text-xs"
               />
             </label>

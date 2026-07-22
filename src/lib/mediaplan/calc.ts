@@ -121,7 +121,12 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
     const imp = (budget / cpm) * 1000;
     const clicks = imp * ctr;
     const formCompletions = clicks * fcr;
-    Object.assign(r, { impressions: imp, clicks, ctr, form_completions: formCompletions, form_completion_rate: fcr });
+    // `conversions` is what the UI labels "Leads" everywhere (Grand Totals,
+    // Compare) — every other branch sets it directly from its own funnel;
+    // this one previously never did, so Lead Gen Form/Document Ad line items
+    // silently contributed 0 to every "Leads" total despite non-zero
+    // Form Completions/MQL/SQL.
+    Object.assign(r, { impressions: imp, clicks, ctr, form_completions: formCompletions, form_completion_rate: fcr, conversions: formCompletions });
     if (goal === 'Conversion') {
       const l2m = bm.lead_to_mql ?? 0.60;
       const m2s = bm.mql_to_sql ?? 0.30;

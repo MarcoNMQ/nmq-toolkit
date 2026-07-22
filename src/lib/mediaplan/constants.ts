@@ -1,4 +1,4 @@
-import type { Benchmark, BenchmarkField, Channel, ChannelKey, Goal } from './types';
+import type { Benchmark, BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat } from './types';
 
 export const MARKET_LABELS: Record<string, string> = {
   AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', HR: 'Croatia', CY: 'Cyprus',
@@ -103,6 +103,24 @@ export const BENCH: Record<string, Record<Channel, Benchmark>> = {
   SE: defaultBench(12.0, 20.0, 0.31, 0.0035, 0.0040, 3.0, 2.60, 0.031),
   CH: defaultBench(13.0, 21.0, 0.31, 0.0035, 0.0040, 3.0, 2.90, 0.032),
   UK: defaultBench(12.0, 20.0, 0.31, 0.0035, 0.0040, 3.0, 2.50, 0.035),
+};
+
+// Default benchmark VALUES for LinkedIn's message/form-based ad formats. The
+// base market benchmark (BENCH[market].LinkedIn) is tuned for standard
+// Sponsored Content and has no open_rate/form_completion_rate fields at all —
+// seeding a Sponsored Message or Lead Gen Form line item straight from it
+// left those fields blank (silently falling back to calc.ts's flat default)
+// and carried over a `ctr` value that means something entirely different in
+// these formats (CTA-click-rate off Opens, not feed-impression CTR),
+// producing a near-0-lead funnel until the user manually clicked "AI
+// suggest". These are reasonable LinkedIn-typical starting points — "AI
+// suggest" remains the source of truth for calibrated, audience/industry-
+// specific numbers; this just stops the DEFAULT from being actively wrong.
+export const LI_FORMAT_BENCH_DEFAULTS: Partial<Record<LinkedInFormat, Partial<Benchmark>>> = {
+  'Sponsored Message / Conversational Ad': { open_rate: 0.45, ctr: 0.03 },
+  'Conversation Ad': { open_rate: 0.50, ctr: 0.05 },
+  'Document Ad': { ctr: 0.006, form_completion_rate: 0.12 },
+  'Lead Gen Form': { ctr: 0.006, form_completion_rate: 0.65 },
 };
 
 export const CH_COLORS: Record<Channel, string[]> = {

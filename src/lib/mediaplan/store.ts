@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { BENCH, BENCH_PRESET_FACTORS, BENCH_FIELDS, channelKeyFor, type PlanTemplate } from './constants';
+import { BENCH, BENCH_PRESET_FACTORS, BENCH_FIELDS, LI_FORMAT_BENCH_DEFAULTS, channelKeyFor, type PlanTemplate } from './constants';
 import { pctFromMarketBudget } from './budgets';
 import type { AiChatKind, Channel, ChannelConfig, ChatMessage, GoalConfig, LinkedInFormat, MarketConfig, PlanConfig, Scenario } from './types';
 
@@ -9,12 +9,16 @@ export function uid(): string {
 }
 
 function newChannelConfig(market: string, channel: Channel, splitPct = 100): ChannelConfig {
+  const liFormat: LinkedInFormat | undefined = channel === 'LinkedIn' ? 'Static' : undefined;
   return {
     id: uid(),
     channel,
     splitPct,
-    benchmark: { ...(BENCH[market]?.[channel] ?? {}) },
-    liFormat: channel === 'LinkedIn' ? 'Static' : undefined,
+    benchmark: {
+      ...(BENCH[market]?.[channel] ?? {}),
+      ...(liFormat ? LI_FORMAT_BENCH_DEFAULTS[liFormat] : {}),
+    },
+    liFormat,
   };
 }
 
@@ -77,6 +81,7 @@ interface MediaPlanState {
   addChannelInstance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channel: Channel) => void;
   removeChannelInstance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string) => void;
   setChannelSplitPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
+  setChannelSplitPctAndRebalance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
   setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number) => void;
   setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
   applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
@@ -240,11 +245,41 @@ export const useMediaPlanStore = create<MediaPlanState>()(
         }))),
       })),
 
+      // Sets exactly this channel's splitPct, untouched otherwise — used by
+      // SplitBar, which already computes both dragged neighbors' new values
+      // itself and calls this once per neighbor. Rebalancing here too would
+      // double-apply on top of SplitBar's own two-party math.
       setChannelSplitPct: (scenarioId, market, goal, channelId, pct) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
           ...g,
           channels: g.channels.map((c) => (c.id === channelId ? { ...c, splitPct: pct } : c)),
         })))),
+      })),
+
+      // Sets this channel's splitPct AND proportionally redistributes the
+      // remainder across every OTHER channel in the goal, so the displayed
+      // percentages always sum to 100 and match what channelBudget() actually
+      // computes — used by the plain "Split %" number input (ChannelSection),
+      // which (unlike SplitBar's two-handle drag) only ever touches one field
+      // at a time and previously left siblings' displayed % stale/unreconciled.
+      setChannelSplitPctAndRebalance: (scenarioId, market, goal, channelId, pct) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => {
+          const target = g.channels.find((c) => c.id === channelId);
+          if (!target) return g;
+          const clamped = Math.min(100, Math.max(0, pct));
+          const others = g.channels.filter((c) => c.id !== channelId);
+          const remaining = 100 - clamped;
+          const othersSum = others.reduce((n, c) => n + c.splitPct, 0);
+          return {
+            ...g,
+            channels: g.channels.map((c) => {
+              if (c.id === channelId) return { ...c, splitPct: clamped };
+              if (others.length === 0) return c;
+              const share = othersSum > 0 ? c.splitPct / othersSum : 1 / others.length;
+              return { ...c, splitPct: Math.round(remaining * share * 10) / 10 };
+            }),
+          };
+        }))),
       })),
 
       setChannelBenchmarkField: (scenarioId, market, goal, channelId, field, value) => set((state) => ({
@@ -261,8 +296,17 @@ export const useMediaPlanStore = create<MediaPlanState>()(
           // use overlapping field NAMES for different meanings (e.g. `cpm`
           // means "cost per send" for Sponsored Message), so stale values
           // would silently misrepresent the new format's assumptions.
-          // Mirrors _clear_li_bench_keys() in media_plan.py.
-          channels: g.channels.map((c) => (c.id === channelId ? { ...c, liFormat: format, benchmark: { ...(BENCH[market]?.LinkedIn ?? {}) } } : c)),
+          // Mirrors _clear_li_bench_keys() in media_plan.py. Layers in
+          // LI_FORMAT_BENCH_DEFAULTS on top of the base market benchmark —
+          // without it, message/form formats got the plain Sponsored-Content
+          // benchmark verbatim (no open_rate/form_completion_rate at all, and
+          // a `ctr` meaning something different), producing a near-0-lead
+          // funnel until "AI suggest" was clicked.
+          channels: g.channels.map((c) => (c.id === channelId ? {
+            ...c,
+            liFormat: format,
+            benchmark: { ...(BENCH[market]?.LinkedIn ?? {}), ...LI_FORMAT_BENCH_DEFAULTS[format] },
+          } : c)),
         })))),
       })),
 
