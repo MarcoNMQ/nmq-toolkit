@@ -379,6 +379,40 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
         ws.getRow(row).height = 28;
         row += 1;
 
+        // Period-by-period breakdown, same periods/labels as the per-market tables above —
+        // each row here sums that period's value for this channel across every market.
+        // A market's Nth period row sits at (its TOTAL row − periods.length + N), since the
+        // per-market block always lays out periods contiguously right before its TOTAL row.
+        const periodRowsList: number[] = [];
+        periods.forEach((p, i) => {
+          const periodRow = row;
+          const rowFill = i % 2 === 0 ? C_ODD : C_EVEN;
+          const cc0 = ws.getCell(row, 1);
+          cc0.value = String(p.label);
+          cc0.fill = rowFill; cc0.font = { bold: true }; cc0.alignment = AC;
+          colKeys.forEach((k, ci) => {
+            const colLetterForKey = colMap[k] ?? 'B';
+            let f = '';
+            if (ADDITIVE_SET.has(k)) {
+              const refs = trows.map((tr2) => `${colLetterForKey}${tr2 - periods.length + i}`).join(', ');
+              f = `IFERROR(SUM(${refs}),"")`;
+            } else if (k in rateFrom) {
+              const [nk, dk] = rateFrom[k];
+              if (colMap[nk] && colMap[dk]) f = `IFERROR(${colMap[nk]}${periodRow}/${colMap[dk]}${periodRow},"")`;
+            } else {
+              const ff = formula(k, colMap, { __row: String(periodRow) }, chName as Channel, liFmt);
+              f = ff ?? '';
+            }
+            const cc = ws.getCell(row, 2 + ci);
+            cc.value = f ? { formula: f } : '';
+            cc.fill = rowFill; cc.font = {}; cc.alignment = AC;
+            cc.numFmt = numFmt(k);
+          });
+          ws.getRow(row).height = 15;
+          row += 1;
+          periodRowsList.push(periodRow);
+        });
+
         c = ws.getCell(row, 1);
         c.value = 'ALL COUNTRIES';
         c.fill = C_STOT; c.font = { bold: true }; c.alignment = AC;
@@ -386,7 +420,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           const colLetterForKey = colMap[k] ?? 'B';
           let f = '';
           if (ADDITIVE_SET.has(k)) {
-            const refs = trows.map((r) => `${colLetterForKey}${r}`).join(', ');
+            const refs = periodRowsList.map((r) => `${colLetterForKey}${r}`).join(', ');
             f = `IFERROR(SUM(${refs}),"")`;
           } else if (k in rateFrom) {
             const [nk, dk] = rateFrom[k];
