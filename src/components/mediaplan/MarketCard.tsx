@@ -32,18 +32,20 @@ export function MarketCard({ scenario, market, audience, industry }: { scenario:
         <label className="flex items-center gap-1 text-xs text-ink-500">
           %
           <input
-            type="number" step="0.5"
+            type="number" step="0.5" min="0"
             value={Math.round(market.pct * 10) / 10}
-            onChange={(e) => setMarketPct(scenario.id, market.market, parseFloat(e.target.value) || 0)}
+            onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E') e.preventDefault(); }}
+            onChange={(e) => setMarketPct(scenario.id, market.market, Math.max(0, parseFloat(e.target.value) || 0))}
             className="w-16 rounded-md border border-ink-200 px-1.5 py-0.5 text-xs"
           />
         </label>
         <label className="flex items-center gap-1 text-xs text-ink-500">
           €
           <input
-            type="number" step="100"
+            type="number" step="100" min="0"
             value={Math.round(budget)}
-            onChange={(e) => setMarketBudgetEuros(scenario.id, market.market, parseFloat(e.target.value) || 0)}
+            onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E') e.preventDefault(); }}
+            onChange={(e) => setMarketBudgetEuros(scenario.id, market.market, Math.max(0, parseFloat(e.target.value) || 0))}
             className="w-24 rounded-md border border-ink-200 px-1.5 py-0.5 text-xs"
           />
         </label>

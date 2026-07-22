@@ -35,9 +35,15 @@ export function ScenarioView({ scenario }: { scenario: Scenario }) {
         <div className="max-w-xs">
           <Field label="Total budget (€)">
             <TextInput
-              type="number" step="100"
+              type="number" step="100" min="0"
               value={scenario.totalBudget}
-              onChange={(e) => setScenarioBudget(scenario.id, parseFloat(e.target.value) || 0)}
+              // Blocking '-'/'e' at the keystroke level (not just clamping after
+              // the fact) matters here: parseFloat('-') is NaN, so the old
+              // "|| 0" fallback fired mid-keystroke and React force-synced the
+              // input's DOM value back to "0" — the next digit typed then
+              // appended AFTER that stray 0 (typing "-500" produced "0500").
+              onKeyDown={(e) => { if (e.key === '-' || e.key === 'e' || e.key === 'E') e.preventDefault(); }}
+              onChange={(e) => setScenarioBudget(scenario.id, Math.max(0, parseFloat(e.target.value) || 0))}
             />
           </Field>
         </div>

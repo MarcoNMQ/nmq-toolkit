@@ -24,9 +24,15 @@ export function Sidebar() {
   const [exporting, setExporting] = useState<string | null>(null);
   const [showSavedPlans, setShowSavedPlans] = useState(false);
   const [currentSavedPlanId, setCurrentSavedPlanId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; kind: 'success' | 'error' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const savedPlans = useSavedPlansStore((s) => s.savedPlans);
   const savePlan = useSavedPlansStore((s) => s.savePlan);
+
+  function showToast(text: string, kind: 'success' | 'error' = 'success') {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), 2800);
+  }
 
   function saveNamedPlan() {
     const existing = currentSavedPlanId ? savedPlans.find((p) => p.id === currentSavedPlanId) : undefined;
@@ -35,6 +41,7 @@ export function Sidebar() {
     if (!name?.trim()) return;
     const id = savePlan(name.trim(), plan, scenarios, undefined, currentSavedPlanId ?? undefined);
     setCurrentSavedPlanId(id);
+    showToast(`Saved "${name.trim()}"`);
   }
 
   // Legacy .json file export — kept as a secondary path (e.g. for sharing a
@@ -48,6 +55,7 @@ export function Sidebar() {
     a.download = `${(plan.campaignName || 'media_plan').replace(/[^a-z0-9]+/gi, '_')}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    showToast('Plan exported as .json');
   }
 
   async function loadPlanJson(file: File) {
@@ -82,6 +90,9 @@ export function Sidebar() {
       a.download = `${(plan.campaignName || 'media_plan').replace(/[^a-z0-9]+/gi, '_')}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
+      showToast('Excel exported');
+    } catch (e) {
+      showToast(`Excel export failed: ${e instanceof Error ? e.message : 'try again'}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -103,6 +114,9 @@ export function Sidebar() {
       a.download = `google_ads_${scenario.name.replace(/[^a-z0-9]+/gi, '_')}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      showToast(`Google Ads CSV exported — ${scenario.name}`);
+    } catch (e) {
+      showToast(`Google Ads export failed: ${e instanceof Error ? e.message : 'try again'}`, 'error');
     } finally {
       setExporting(null);
     }
@@ -110,6 +124,13 @@ export function Sidebar() {
 
   return (
     <>
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-[60] rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-lg ${toast.kind === 'error' ? 'bg-red-600' : 'bg-ink-900'}`}
+        >
+          {toast.kind === 'error' ? '✕ ' : '✓ '}{toast.text}
+        </div>
+      )}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileSidebarOpen(false)} />
       )}
