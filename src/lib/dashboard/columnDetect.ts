@@ -17,6 +17,7 @@ export const COLUMN_ALIASES: Partial<Record<keyof AdRow, string[]>> = {
   funnel_stage:       ['funnel stage', 'funnel', 'objective', 'optimization goal', 'goal', 'campaign objective', 'funnel_stage', 'marketing objective'],
   spend:              ['spend', 'amount spent', 'amount spent (eur)', 'amount spent (usd)', 'cost', 'cost (*)', 'budget spent', 'total cost', 'total spend', 'advertising cost', 'ad spend'],
   impressions:        ['impressions', 'impr.', 'impr', 'total impressions', 'impression'],
+  reach:              ['reach', 'unique reach', 'people reached', 'unique users reached', 'total reach', 'unique reach (users)'],
   // "clicks (all)" and "clicks (destination)" both strip to "clicks" via normalize — handled by ordering
   clicks:             ['clicks', 'clicks (all)', 'all clicks', 'total clicks', 'click'],
   // Platform-specific link click names — listed before the generic "link clicks" fallback
@@ -53,7 +54,7 @@ export const COLUMN_ALIASES: Partial<Record<keyof AdRow, string[]>> = {
 
 // Which fields are numeric (vs string/date)
 export const NUMERIC_FIELDS = new Set<keyof AdRow>([
-  'spend', 'impressions', 'clicks', 'link_clicks', 'landing_page_views',
+  'spend', 'impressions', 'reach', 'clicks', 'link_clicks', 'landing_page_views',
   'engagements', 'video_plays', 'video_25', 'video_50', 'video_75', 'video_100',
   'conversions', 'revenue', 'ctr', 'cpc', 'cpm', 'roas', 'cvr', 'vtr',
 ]);
@@ -176,6 +177,21 @@ export function inferFunnelStage(row: Record<string, string>): AdRow['funnel_sta
   return 'unknown';
 }
 
+// Parses a raw cell value into a number, tolerant of whatever formatting the source
+// platform used: currency symbols (€/$/£, or a mis-decoded "�" placeholder), thousands
+// separators, and pre-calculated percentages. A value ending in "%" (e.g. a platform's
+// own "CTR" column reading "0.07%") is divided by 100 so it matches the fraction
+// convention (0.0007) the rest of the app uses for rate metrics — otherwise it would
+// render as "7.00%" instead of "0.07%", a 100x display error.
+function parseNumeric(raw: string): number {
+  const trimmed = raw.trim();
+  const isPercent = trimmed.endsWith('%');
+  const cleaned = trimmed.replace(/[^0-9.,-]/g, '').replace(/,/g, '');
+  const n = parseFloat(cleaned);
+  if (isNaN(n)) return 0;
+  return isPercent ? n / 100 : n;
+}
+
 export function applyMapping(
   rawRows: Record<string, string>[],
   mapping: ColumnMapping[]
@@ -200,8 +216,7 @@ export function applyMapping(
         const d = new Date(val);
         row.date = !isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : val;
       } else if (NUMERIC_FIELDS.has(stdField)) {
-        const n = parseFloat(String(val).replace(/,/g, '').trim());
-        row[stdField] = isNaN(n) ? 0 : n;
+        row[stdField] = parseNumeric(String(val));
       } else {
         row[stdField] = val;
       }
@@ -238,8 +253,9 @@ export function applyMapping(
     if (!row.roas && rev)  row.roas = spd > 0 ? rev  / spd  : 0;
     if (!row.vtr  && v100) row.vtr  = imp > 0 ? v100 / imp  : 0;
 
-    // Skip rows with no date or no spend/impressions
-    if (!row.date || (imp === 0 && Number(row.spend ?? 0) === 0)) continue;
+    // Skip rows with no usable signal at all (date is not required — many
+    // creative-level/summary exports report one row per creative with no date column)
+    if (imp === 0 && spd === 0 && clk === 0 && conv === 0) continue;
 
     result.push(row as unknown as AdRow);
   }

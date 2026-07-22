@@ -17,6 +17,7 @@ export interface AdRow {
   key_family?: string;
   spend: number;
   impressions: number;
+  reach?: number;
   clicks: number;
   link_clicks?: number;
   landing_page_views?: number;

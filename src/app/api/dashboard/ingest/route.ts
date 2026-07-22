@@ -61,12 +61,19 @@ async function readSheet(sheetId: string, gid?: string | null): Promise<{ column
   return { columns, rows, sheetTabs };
 }
 
-// Detect BOM and decode UTF-16 / UTF-8 accordingly
+// Detect BOM and decode UTF-16 / UTF-8 accordingly. Falls back to Windows-1252 when the
+// bytes aren't valid UTF-8 — the common case for CSVs saved from Excel on Windows, where a
+// currency symbol like € (0x80 in cp1252) is not a valid UTF-8 byte sequence on its own and
+// would otherwise get silently mangled into "�", breaking every numeric value that follows it.
 function decodeBuffer(buffer: ArrayBuffer): string {
   const b = new Uint8Array(buffer);
   if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(buffer);
   if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(buffer);
-  return new TextDecoder('utf-8').decode(buffer);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
 }
 
 // Skip platform metadata rows (LinkedIn, Meta, Google Ads exports put 3-5 header lines
@@ -91,34 +98,51 @@ async function parseCsv(text: string): Promise<{ columns: string[]; rows: Record
   return { columns, rows: result.data };
 }
 
+// Reads every worksheet in the workbook (not just the first tab) and merges them into one
+// row set. Real-world exports routinely split data across tabs — e.g. one tab per platform,
+// per market, or a "Creatives" tab alongside a "Summary" cover tab — and only reading tab 1
+// would silently drop everything else.
 async function parseXlsx(buffer: ArrayBuffer): Promise<{ columns: string[]; rows: Record<string, string>[] }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
-  const ws = wb.worksheets[0];
-  if (!ws) return { columns: [], rows: [] };
 
-  const headerRow = ws.getRow(1);
-  const columns: string[] = [];
-  headerRow.eachCell({ includeEmpty: false }, (cell) => {
-    columns.push(String(cell.value ?? '').trim());
-  });
+  const allColumns = new Set<string>();
+  const allRows: Record<string, string>[] = [];
 
-  const rows: Record<string, string>[] = [];
-  ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber === 1) return;
-    const obj: Record<string, string> = {};
-    columns.forEach((col, i) => {
-      const cell = row.getCell(i + 1);
-      let val = cell.value;
-      if (val instanceof Date) val = val.toISOString().slice(0, 10);
-      else if (val && typeof val === 'object' && 'result' in val) val = String((val as { result: unknown }).result ?? '');
-      else if (val && typeof val === 'object' && 'text' in val) val = String((val as { text: unknown }).text ?? '');
-      obj[col] = val !== null && val !== undefined ? String(val) : '';
+  for (const ws of wb.worksheets) {
+    if (!ws || ws.rowCount < 2) continue;
+
+    const headerRow = ws.getRow(1);
+    const columns: string[] = [];
+    headerRow.eachCell({ includeEmpty: false }, (cell) => {
+      columns.push(String(cell.value ?? '').trim());
     });
-    if (Object.values(obj).some((v) => v !== '')) rows.push(obj);
-  });
+    if (!columns.length) continue;
 
-  return { columns, rows };
+    // Skip tabs that don't look like tabular ad data (cover pages, notes, legends, etc.)
+    if (!DATA_HEADER_RE.test(columns.join(' '))) continue;
+
+    const sheetRows: Record<string, string>[] = [];
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const obj: Record<string, string> = {};
+      columns.forEach((col, i) => {
+        const cell = row.getCell(i + 1);
+        let val = cell.value;
+        if (val instanceof Date) val = val.toISOString().slice(0, 10);
+        else if (val && typeof val === 'object' && 'result' in val) val = String((val as { result: unknown }).result ?? '');
+        else if (val && typeof val === 'object' && 'text' in val) val = String((val as { text: unknown }).text ?? '');
+        obj[col] = val !== null && val !== undefined ? String(val) : '';
+      });
+      if (Object.values(obj).some((v) => v !== '')) sheetRows.push(obj);
+    });
+    if (!sheetRows.length) continue;
+
+    columns.forEach((c) => allColumns.add(c));
+    allRows.push(...sheetRows);
+  }
+
+  return { columns: [...allColumns], rows: allRows };
 }
 
 export async function POST(req: NextRequest) {

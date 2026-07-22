@@ -27,6 +27,7 @@ export function aggregateKpis(rows: AdRow[]): KpiBlock {
     (acc, r) => {
       acc.spend += r.spend;
       acc.impressions += r.impressions;
+      acc.reach += r.reach ?? 0;
       acc.clicks += r.clicks;
       acc.link_clicks += r.link_clicks ?? 0;
       acc.landing_page_views += r.landing_page_views ?? 0;
@@ -38,7 +39,7 @@ export function aggregateKpis(rows: AdRow[]): KpiBlock {
       return acc;
     },
     {
-      spend: 0, impressions: 0, clicks: 0, link_clicks: 0,
+      spend: 0, impressions: 0, reach: 0, clicks: 0, link_clicks: 0,
       landing_page_views: 0, engagements: 0, video_plays: 0,
       video_100: 0, conversions: 0, revenue: 0,
     }
@@ -47,6 +48,7 @@ export function aggregateKpis(rows: AdRow[]): KpiBlock {
   return {
     spend: totals.spend,
     impressions: totals.impressions,
+    reach: totals.reach || undefined,
     clicks: totals.clicks,
     link_clicks: totals.link_clicks,
     landing_page_views: totals.landing_page_views,
@@ -97,7 +99,7 @@ export function buildTrend(rows: AdRow[]): TrendPoint[] {
 
 export function buildBreakdown(
   rows: AdRow[],
-  dim: DashboardFilters['breakdownDim']
+  dim: DashboardFilters['breakdownDim'] | keyof AdRow
 ): BreakdownRow[] {
   const byDim: Record<string, AdRow[]> = {};
   for (const r of rows) {

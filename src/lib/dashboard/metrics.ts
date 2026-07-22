@@ -1,5 +1,5 @@
 export type MetricKey =
-  | 'impressions' | 'clicks' | 'spend'
+  | 'impressions' | 'reach' | 'clicks' | 'spend'
   | 'link_clicks' | 'landing_page_views' | 'engagements'
   | 'video_plays' | 'video_100' | 'conversions' | 'revenue'
   | 'ctr' | 'cpc' | 'cpm' | 'roas' | 'cvr' | 'vtr';
@@ -18,6 +18,7 @@ export interface MetricDef {
 
 export const METRIC_DEFS: Record<MetricKey, MetricDef> = {
   impressions:        { label: 'Impressions',       shortLabel: 'Impr.',    format: 'int', category: 'delivery',   order: 1,  description: 'How many times your ads were shown. The raw reach figure — good for awareness but says nothing about quality.' },
+  reach:              { label: 'Reach',             shortLabel: 'Reach',    format: 'int', category: 'delivery',   order: 1.5, description: 'Unique people who saw your ad at least once. Unlike impressions, this does not double-count repeat views — the true audience-size metric for awareness.' },
   clicks:             { label: 'Clicks',             shortLabel: 'Clicks',   format: 'int', category: 'delivery',   order: 2,  description: 'How many times someone clicked your ad. The primary volume metric for traffic and lead gen campaigns.' },
   spend:              { label: 'Spend',              shortLabel: 'Spend',    format: 'eur', category: 'delivery',   order: 3,  description: 'Total budget consumed. Watch this against your pacing target to catch under- or over-delivery early.' },
   link_clicks:        { label: 'Link Clicks',        shortLabel: 'L.Clicks', format: 'int', category: 'delivery',   order: 4,  description: 'Clicks specifically on links within your ad, as reported by social platforms. Usually lower than total clicks.' },

@@ -4,6 +4,7 @@ import DataSourcePicker from '@/components/dashboard/DataSourcePicker';
 import { detectColumns, applyMapping } from '@/lib/dashboard/columnDetect';
 import { aggregateKpis, buildBreakdown, applyFilters } from '@/lib/dashboard/aggregate';
 import { formatMetric } from '@/lib/dashboard/metrics';
+import type { AdRow } from '@/lib/dashboard/types';
 import KpiMatrixPanel from './KpiMatrixPanel';
 
 type Step = 'upload' | 'ready' | 'generating' | 'done';
@@ -75,9 +76,12 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
   const adRows = applyMapping(rows, mapped);
 
   if (!adRows.length) {
+    // Nothing recognisable — fall back to a larger raw preview so Claude still has
+    // something to work with (this should be rare now that date is no longer required).
+    const previewCount = Math.min(rows.length, 25);
     const sampleLines = [
       columns.join(', '),
-      ...rows.slice(0, 3).map((r) => columns.map((c) => r[c] ?? '').join(', ')),
+      ...rows.slice(0, previewCount).map((r) => columns.map((c) => r[c] ?? '').join(', ')),
     ];
     return {
       rowCount: rows.length,
@@ -85,7 +89,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
       channels: [],
       markets: [],
       hasFunnelData: false,
-      context: `Raw data (${rows.length} rows, columns: ${columns.join(', ')}):\n${sampleLines.join('\n')}`,
+      context: `Raw data — none of the columns matched a known paid-media field, showing ${previewCount} of ${rows.length} rows verbatim (columns: ${columns.join(', ')}):\n${sampleLines.join('\n')}`,
     };
   }
 
@@ -100,8 +104,20 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
   const hasFunnelData = stages.some((s) => s !== 'unknown');
 
   const totals = aggregateKpis(adRows);
-  const byChannel = buildBreakdown(adRows, 'channel');
-  const byMarket = buildBreakdown(adRows, 'market');
+
+  // Generic dimension breakdown — any recognised segmenting field with more than one
+  // distinct value gets its own section, not just channel/market. This is what lets an
+  // arbitrary, un-templated export (e.g. a creative-level report with no date column)
+  // still surface a per-creative view instead of only a flat total.
+  const DIMENSION_CANDIDATES: Array<{ field: keyof AdRow; label: string }> = [
+    { field: 'ad_name', label: 'CREATIVE' },
+    { field: 'channel', label: 'CHANNEL' },
+    { field: 'market', label: 'MARKET' },
+    { field: 'product', label: 'PRODUCT' },
+    { field: 'category', label: 'CATEGORY' },
+    { field: 'product_family', label: 'PRODUCT FAMILY' },
+    { field: 'campaign_name', label: 'CAMPAIGN' },
+  ];
 
   const lines: string[] = [
     'PAID MEDIA CAMPAIGN DATA',
@@ -113,6 +129,7 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
     '',
     'OVERALL TOTALS:',
     `Impressions: ${formatMetric('impressions', totals.impressions)}`,
+    totals.reach ? `Reach (sum across rows — not deduplicated across overlapping audiences, treat as directional): ${formatMetric('reach', totals.reach)}` : '',
     `Spend: ${formatMetric('spend', totals.spend)}`,
     `Clicks: ${formatMetric('clicks', totals.clicks)}`,
     `CTR: ${formatMetric('ctr', totals.ctr)}`,
@@ -125,28 +142,27 @@ function buildContext(columns: string[], rows: Record<string, string>[]): DataSu
     totals.revenue ? `Revenue: ${formatMetric('revenue', totals.revenue)}` : '',
   ].filter(Boolean);
 
-  if (byChannel.length > 1) {
-    lines.push('', 'BY CHANNEL:');
-    for (const row of byChannel) {
+  for (const { field, label } of DIMENSION_CANDIDATES) {
+    const present = adRows.some((r) => r[field]);
+    if (!present) continue;
+    const breakdown = buildBreakdown(adRows, field);
+    if (breakdown.length <= 1) continue; // no point breaking out a single-valued dimension
+
+    lines.push('', `BY ${label} (share of total impressions / spend shown so figures aren't guessed):`);
+    for (const row of breakdown) {
+      const impShare = totals.impressions > 0 ? (row.impressions ?? 0) / totals.impressions * 100 : 0;
+      const spendShare = totals.spend > 0 ? (row.spend ?? 0) / totals.spend * 100 : 0;
       const parts = [
         `${row.dim}:`,
-        `${formatMetric('impressions', row.impressions)} impr`,
-        `${formatMetric('spend', row.spend)} spend`,
+        `${formatMetric('impressions', row.impressions)} impr (${impShare.toFixed(0)}% of total)`,
+        `${formatMetric('spend', row.spend)} spend (${spendShare.toFixed(0)}% of total)`,
         `CTR ${formatMetric('ctr', row.ctr)}`,
         `CPM ${formatMetric('cpm', row.cpm)}`,
       ];
+      if (row.reach) parts.push(`Reach ${formatMetric('reach', row.reach)}`);
       if (row.vtr) parts.push(`VTR ${formatMetric('vtr', row.vtr)}`);
       if (row.roas) parts.push(`ROAS ${formatMetric('roas', row.roas)}`);
       lines.push(parts.join(' | '));
-    }
-  }
-
-  if (byMarket.length > 1) {
-    lines.push('', 'BY MARKET:');
-    for (const row of byMarket) {
-      lines.push(
-        `${row.dim}: ${formatMetric('impressions', row.impressions)} impr | ${formatMetric('spend', row.spend)} spend | CTR ${formatMetric('ctr', row.ctr)}`
-      );
     }
   }
 
