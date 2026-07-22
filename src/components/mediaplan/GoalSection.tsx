@@ -1,9 +1,10 @@
 'use client';
 
 import { ALL_CHANNELS } from '@/lib/mediaplan/constants';
-import { goalBudget } from '@/lib/mediaplan/budgets';
+import { goalBudget, channelBudget } from '@/lib/mediaplan/budgets';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
 import { ChannelSection } from '@/components/mediaplan/ChannelSection';
+import { SplitBar } from '@/components/mediaplan/SplitBar';
 import { MultiToggle } from '@/components/Field';
 import type { Channel, GoalConfig, MarketConfig, Scenario } from '@/lib/mediaplan/types';
 
@@ -11,12 +12,28 @@ export function GoalSection({ scenario, market, goal, audience, industry }: { sc
   const setGoalChannels = useMediaPlanStore((s) => s.setGoalChannels);
   const setGoalPct = useMediaPlanStore((s) => s.setGoalPct);
   const addChannelInstance = useMediaPlanStore((s) => s.addChannelInstance);
+  const setChannelSplitPct = useMediaPlanStore((s) => s.setChannelSplitPct);
 
   const budget = goalBudget(scenario, market, goal);
   // Channel types currently present at least once — each gets an "add another"
   // affordance so e.g. LinkedIn can run as two separate line items (one
   // Sponsored Message, one Lead Gen Form) within the same goal.
   const presentChannelTypes = [...new Set(goal.channels.map((c) => c.channel))];
+
+  // Labels disambiguate duplicate channel types (e.g. two LinkedIn instances)
+  // with a "#N" suffix and, for LinkedIn, its format — same convention as
+  // ChannelSection's own instance label.
+  const splitSegments = goal.channels.map((c) => {
+    const sameType = goal.channels.filter((x) => x.channel === c.channel);
+    const n = sameType.length > 1 ? ` #${sameType.indexOf(c) + 1}` : '';
+    const fmt = c.channel === 'LinkedIn' && c.liFormat ? ` (${c.liFormat})` : '';
+    return {
+      id: c.id,
+      label: `${c.channel}${n}${fmt}`,
+      pct: c.splitPct,
+      amount: channelBudget(scenario, market, goal, c.splitPct),
+    };
+  });
 
   return (
     <div className="space-y-2 rounded-md border border-ink-100 bg-white p-3">
@@ -58,6 +75,15 @@ export function GoalSection({ scenario, market, goal, audience, industry }: { sc
             </button>
           ))}
         </div>
+      )}
+
+      {goal.channels.length > 1 && (
+        <SplitBar
+          segments={splitSegments}
+          onChange={(updates) => {
+            Object.entries(updates).forEach(([id, pct]) => setChannelSplitPct(scenario.id, market.market, goal.goal, id, pct));
+          }}
+        />
       )}
 
       <div className="space-y-2">
