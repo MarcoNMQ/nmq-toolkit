@@ -82,6 +82,7 @@ interface MediaPlanState {
   removeChannelInstance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string) => void;
   setChannelSplitPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
   setChannelSplitPctAndRebalance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
+  setChannelActiveRange: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, activeFrom?: string, activeTo?: string) => void;
   setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number) => void;
   setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
   applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
@@ -280,6 +281,13 @@ export const useMediaPlanStore = create<MediaPlanState>()(
             }),
           };
         }))),
+      })),
+
+      setChannelActiveRange: (scenarioId, market, goal, channelId, activeFrom, activeTo) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
+          ...g,
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, activeFrom, activeTo } : c)),
+        })))),
       })),
 
       setChannelBenchmarkField: (scenarioId, market, goal, channelId, field, value) => set((state) => ({

@@ -2,7 +2,16 @@ import ExcelJS from 'exceljs';
 import { generatePeriods } from './calc';
 import { marketBudget, goalBudget, channelBudget } from './budgets';
 import { ADDITIVE, BENCH_FIELDS, COL_FMT, MARKET_LABELS, PHASE_COLS, channelKeyFor } from './constants';
-import type { BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat, PlanConfig, Scenario } from './types';
+import type { BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat, PlanConfig, Period, Scenario } from './types';
+
+// Mirrors calc.ts's isPeriodActive() — a period counts as active for a
+// channel with a timing window (chCfg.activeFrom/activeTo) when it overlaps
+// that window at all. No window means active for every period, preserving
+// the original whole-flight spread for every channel that doesn't set one.
+function isPeriodActive(p: Period, activeFrom?: string, activeTo?: string): boolean {
+  if (!activeFrom || !activeTo) return true;
+  return p.start <= activeTo && p.end >= activeFrom;
+}
 
 // Direct port of _build_excel_all() in media_plan.py — one workbook, one
 // tab per scenario, countries stacked vertically, a Scenario Totals
@@ -228,7 +237,10 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           const nChCols = colKeys.length + 1;
           const colMap: Record<string, string> = {};
           colKeys.forEach((k, i) => { colMap[k] = colLetter(2 + i); });
-          const dailyBud = chBud / totalDays;
+          const activeDays = periods
+            .filter((p) => isPeriodActive(p, chCfg.activeFrom, chCfg.activeTo))
+            .reduce((n, p) => n + p.days, 0) || 1;
+          const dailyBud = chBud / activeDays;
 
           const chLabel = liFmt ? `${chCfg.channel} (${liFmt})` : chCfg.channel;
           let c = ws.getCell(row, 1);
@@ -282,7 +294,8 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
 
           const firstDataRow = row;
           periods.forEach((p, rIdx) => {
-            const bud = (chBud * p.days) / totalDays;
+            const active = isPeriodActive(p, chCfg.activeFrom, chCfg.activeTo);
+            const bud = active ? (chBud * p.days) / activeDays : 0;
             const rowFill = rIdx % 2 === 0 ? C_ODD : C_EVEN;
             const cc0 = ws.getCell(row, 1);
             cc0.value = String(p.label);

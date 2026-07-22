@@ -48,6 +48,14 @@ export interface ChannelConfig {
   splitPct: number;
   benchmark: Benchmark;
   liFormat?: LinkedInFormat;
+  // Optional sub-range of the plan's overall flight (ISO 'YYYY-MM-DD') during
+  // which THIS channel instance actually runs — e.g. one LinkedIn format for
+  // the first two weeks, a retargeting format for the next two. When unset,
+  // the channel runs across the entire flight (unchanged default behavior).
+  // Stored as dates rather than period indices so a selection stays valid
+  // even if the plan's breakdown (Daily/Weekly/...) changes afterward.
+  activeFrom?: string;
+  activeTo?: string;
 }
 
 // One goal's settings within a market — which channels are on, the
@@ -99,6 +107,11 @@ export interface PlanConfig {
 export interface Period {
   label: string;
   days: number;
+  // ISO date strings ('YYYY-MM-DD') for this period's calendar boundaries —
+  // lets a channel's active window (ChannelConfig.activeFrom/activeTo) be
+  // tested for overlap regardless of the plan's breakdown granularity.
+  start: string;
+  end: string;
 }
 
 // Output of calcRow() — a sparse bag of metrics, only the keys relevant

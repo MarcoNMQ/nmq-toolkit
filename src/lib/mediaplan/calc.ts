@@ -6,6 +6,16 @@ function fmtDayMonth(d: Date): string {
   return d.toLocaleDateString('en-GB', { month: 'short', day: '2-digit' }).replace(',', '');
 }
 
+// Local-date ISO formatting (NOT toISOString(), which converts to UTC and
+// would shift the date by a day in timezones ahead of UTC — this file's
+// dates are deliberately local, per generatePeriods()'s existing convention).
+function isoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** Direct port of generate_periods() in media_plan.py. Dates are local
  *  (no timezone math) — `start`/`end` are 'YYYY-MM-DD' strings. */
 export function generatePeriods(start: string, end: string, breakdown: Breakdown): Period[] {
@@ -15,21 +25,21 @@ export function generatePeriods(start: string, end: string, breakdown: Breakdown
 
   if (breakdown === 'Daily') {
     while (cur <= endDate) {
-      periods.push({ label: cur.toLocaleDateString('en-GB', { month: 'short', day: '2-digit', year: 'numeric' }).replace(',', ''), days: 1 });
+      periods.push({ label: cur.toLocaleDateString('en-GB', { month: 'short', day: '2-digit', year: 'numeric' }).replace(',', ''), days: 1, start: isoDate(cur), end: isoDate(cur) });
       cur = new Date(cur.getTime() + 86400000);
     }
   } else if (breakdown === 'Weekly') {
     while (cur <= endDate) {
       const pEnd = new Date(Math.min(cur.getTime() + 6 * 86400000, endDate.getTime()));
       const days = Math.round((pEnd.getTime() - cur.getTime()) / 86400000) + 1;
-      periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days });
+      periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days, start: isoDate(cur), end: isoDate(pEnd) });
       cur = new Date(cur.getTime() + 7 * 86400000);
     }
   } else if (breakdown === 'Bi-Weekly') {
     while (cur <= endDate) {
       const pEnd = new Date(Math.min(cur.getTime() + 13 * 86400000, endDate.getTime()));
       const days = Math.round((pEnd.getTime() - cur.getTime()) / 86400000) + 1;
-      periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days });
+      periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days, start: isoDate(cur), end: isoDate(pEnd) });
       cur = new Date(cur.getTime() + 14 * 86400000);
     }
   } else if (breakdown === 'Monthly') {
@@ -38,7 +48,7 @@ export function generatePeriods(start: string, end: string, breakdown: Breakdown
       const monthEnd = new Date(cur.getFullYear(), cur.getMonth(), lastDay);
       const pEnd = new Date(Math.min(monthEnd.getTime(), endDate.getTime()));
       const days = Math.round((pEnd.getTime() - cur.getTime()) / 86400000) + 1;
-      periods.push({ label: cur.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), days });
+      periods.push({ label: cur.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), days, start: isoDate(cur), end: isoDate(pEnd) });
       cur = cur.getMonth() === 11
         ? new Date(cur.getFullYear() + 1, 0, 1)
         : new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
@@ -185,13 +195,32 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
 }
 
 /** Direct port of build_table() — per-period rows plus a TOTAL row. */
-export function buildTable(periods: Period[], totalBudget: number, bm: Benchmark, goal: Goal, channel: Channel, convRate: number, liFormat?: LinkedInFormat): PeriodRow[] {
+// A period is "active" for a channel with a timing window when it overlaps
+// [activeFrom, activeTo] at all — plain string comparison works because both
+// are ISO 'YYYY-MM-DD'. No window (either bound unset) means active always,
+// preserving the original whole-flight behavior for every existing plan.
+function isPeriodActive(p: Period, activeFrom?: string, activeTo?: string): boolean {
+  if (!activeFrom || !activeTo) return true;
+  return p.start <= activeTo && p.end >= activeFrom;
+}
+
+export function buildTable(
+  periods: Period[], totalBudget: number, bm: Benchmark, goal: Goal, channel: Channel, convRate: number,
+  liFormat?: LinkedInFormat, activeFrom?: string, activeTo?: string,
+): PeriodRow[] {
   const totalDays = periods.reduce((n, p) => n + p.days, 0) || 1;
+  const activePeriods = periods.filter((p) => isPeriodActive(p, activeFrom, activeTo));
+  const activeDays = activePeriods.reduce((n, p) => n + p.days, 0) || 1;
+
   const rows: PeriodRow[] = periods.map((p) => {
-    const bud = (totalBudget * p.days) / totalDays;
+    const active = isPeriodActive(p, activeFrom, activeTo);
+    const bud = active ? (totalBudget * p.days) / activeDays : 0;
     const m = calcRow(bud, bm, goal, channel, convRate, liFormat);
     return { Period: p.label, Days: p.days, ...m };
   });
+  // The TOTAL row always reflects the channel's full allocated budget,
+  // regardless of timing window — the window only changes HOW it's spread
+  // across periods, not how much the channel gets overall.
   const totalRow: PeriodRow = { Period: 'TOTAL', Days: totalDays, ...calcRow(totalBudget, bm, goal, channel, convRate, liFormat) };
   return [...rows, totalRow];
 }

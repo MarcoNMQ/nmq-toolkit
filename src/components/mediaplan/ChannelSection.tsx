@@ -7,6 +7,7 @@ import { useMediaPlanStore } from '@/lib/mediaplan/store';
 import { BenchmarkEditor } from '@/components/mediaplan/BenchmarkEditor';
 import { PeriodTable } from '@/components/mediaplan/PeriodTable';
 import { Funnel } from '@/components/mediaplan/Funnel';
+import { PeriodRangeSlider } from '@/components/mediaplan/PeriodRangeSlider';
 import { Select } from '@/components/Field';
 import type { GoalConfig, LinkedInFormat, MarketConfig, Scenario } from '@/lib/mediaplan/types';
 
@@ -19,6 +20,7 @@ export function ChannelSection({
   const setChannelSplitPctAndRebalance = useMediaPlanStore((s) => s.setChannelSplitPctAndRebalance);
   const setChannelLiFormat = useMediaPlanStore((s) => s.setChannelLiFormat);
   const removeChannelInstance = useMediaPlanStore((s) => s.removeChannelInstance);
+  const setChannelActiveRange = useMediaPlanStore((s) => s.setChannelActiveRange);
   const channelConfig = goal.channels[channelIndex];
 
   const budget = channelBudget(scenario, market, goal, channelConfig.splitPct);
@@ -29,12 +31,17 @@ export function ChannelSection({
   const sameTypeInstances = goal.channels.filter((c) => c.channel === channelConfig.channel);
   const instanceNumber = sameTypeInstances.length > 1 ? sameTypeInstances.indexOf(channelConfig) + 1 : null;
 
+  const periods = useMemo(
+    () => generatePeriods(plan.startDate, plan.endDate, plan.breakdown),
+    [plan.startDate, plan.endDate, plan.breakdown],
+  );
+
   const rows = useMemo(
-    () => {
-      const periods = generatePeriods(plan.startDate, plan.endDate, plan.breakdown);
-      return buildTable(periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate, channelConfig.liFormat);
-    },
-    [plan.startDate, plan.endDate, plan.breakdown, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate, channelConfig.liFormat],
+    () => buildTable(
+      periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate,
+      channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo,
+    ),
+    [periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate, channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo],
   );
   const totalRow = rows[rows.length - 1];
 
@@ -78,6 +85,13 @@ export function ChannelSection({
         </div>
         <span className="text-xs font-bold text-mint-600">€{budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
       </div>
+
+      <PeriodRangeSlider
+        periods={periods}
+        activeFrom={channelConfig.activeFrom}
+        activeTo={channelConfig.activeTo}
+        onChange={(activeFrom, activeTo) => setChannelActiveRange(scenario.id, market.market, goal.goal, channelConfig.id, activeFrom, activeTo)}
+      />
 
       <BenchmarkEditor
         scenarioId={scenario.id} market={market.market} goal={goal.goal} channel={channelConfig.channel}
