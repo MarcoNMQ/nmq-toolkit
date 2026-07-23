@@ -109,7 +109,11 @@ export default function Home() {
         <div className="w-full max-w-5xl">
           <motion.div
             className="mb-12 text-center"
-            initial={{ opacity: 0, y: -18 }}
+            // opacity always starts at 1 — a client-only animation library
+            // shouldn't make interactive/functional content invisible during
+            // the load window before it mounts; only the slide-in (y) is
+            // deferred, so there's never a "washed out / looks disabled" flash.
+            initial={{ opacity: 1, y: -18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           >
@@ -127,7 +131,12 @@ export default function Home() {
               return (
                 <motion.div
                   key={tool.href}
-                  initial={{ opacity: 0, y: 32 }}
+                  // Same reasoning as the hero above: these are the primary
+                  // navigational elements on the page — they must never
+                  // render at opacity 0 (reads as a disabled/broken card
+                  // during the gap before Framer Motion mounts). Only the
+                  // staggered slide-up is deferred.
+                  initial={{ opacity: 1, y: 32 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.45, delay: i * 0.1 }}
                   className="h-full"
