@@ -16,6 +16,13 @@ function isoDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Hard ceiling on period count regardless of breakdown — a corrupted or
+// absurd start/end range (bad manual input, bad import file) would otherwise
+// make this loop build tens/hundreds of thousands of periods, each rendered
+// as its own DOM cell in PeriodRangeSlider for every channel, freezing the
+// tab. ~27 years of daily periods, comfortably beyond any real media plan.
+const MAX_PERIODS = 10_000;
+
 /** Direct port of generate_periods() in media_plan.py. Dates are local
  *  (no timezone math) — `start`/`end` are 'YYYY-MM-DD' strings. */
 export function generatePeriods(start: string, end: string, breakdown: Breakdown): Period[] {
@@ -24,26 +31,26 @@ export function generatePeriods(start: string, end: string, breakdown: Breakdown
   let cur = new Date(`${start}T00:00:00`);
 
   if (breakdown === 'Daily') {
-    while (cur <= endDate) {
+    while (cur <= endDate && periods.length < MAX_PERIODS) {
       periods.push({ label: cur.toLocaleDateString('en-GB', { month: 'short', day: '2-digit', year: 'numeric' }).replace(',', ''), days: 1, start: isoDate(cur), end: isoDate(cur) });
       cur = new Date(cur.getTime() + 86400000);
     }
   } else if (breakdown === 'Weekly') {
-    while (cur <= endDate) {
+    while (cur <= endDate && periods.length < MAX_PERIODS) {
       const pEnd = new Date(Math.min(cur.getTime() + 6 * 86400000, endDate.getTime()));
       const days = Math.round((pEnd.getTime() - cur.getTime()) / 86400000) + 1;
       periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days, start: isoDate(cur), end: isoDate(pEnd) });
       cur = new Date(cur.getTime() + 7 * 86400000);
     }
   } else if (breakdown === 'Bi-Weekly') {
-    while (cur <= endDate) {
+    while (cur <= endDate && periods.length < MAX_PERIODS) {
       const pEnd = new Date(Math.min(cur.getTime() + 13 * 86400000, endDate.getTime()));
       const days = Math.round((pEnd.getTime() - cur.getTime()) / 86400000) + 1;
       periods.push({ label: `${fmtDayMonth(cur)} – ${fmtDayMonth(pEnd)}`, days, start: isoDate(cur), end: isoDate(pEnd) });
       cur = new Date(cur.getTime() + 14 * 86400000);
     }
   } else if (breakdown === 'Monthly') {
-    while (cur <= endDate) {
+    while (cur <= endDate && periods.length < MAX_PERIODS) {
       const lastDay = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
       const monthEnd = new Date(cur.getFullYear(), cur.getMonth(), lastDay);
       const pEnd = new Date(Math.min(monthEnd.getTime(), endDate.getTime()));

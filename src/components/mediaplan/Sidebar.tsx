@@ -7,6 +7,20 @@ import { importLegacyPlan, isLegacyPlanFile } from '@/lib/mediaplan/legacyImport
 import { Field, Select, TextInput } from '@/components/Field';
 import { SavedPlansModal } from '@/components/mediaplan/SavedPlansModal';
 
+// Native <input type="date"> fires onChange after every keystroke, including
+// while retyping just the year segment digit-by-digit — each partial digit
+// forms a complete but wildly-wrong date (year "0002", "0020", "0202", ...
+// on the way to "2026"). Committing those to the store would balloon
+// generatePeriods()'s period count and freeze the tab (and persist the bad
+// range to localStorage, so it freezes on every reload too). Reject anything
+// outside a sane campaign-planning window instead of trusting every keystroke.
+function isPlausibleDate(value: string): boolean {
+  const match = /^(\d{4})-\d{2}-\d{2}$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  return year >= 1990 && year <= 2100;
+}
+
 export function Sidebar() {
   const plan = useMediaPlanStore((s) => s.plan);
   const setPlan = useMediaPlanStore((s) => s.setPlan);
@@ -213,10 +227,10 @@ export function Sidebar() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Start date">
-            <TextInput type="date" value={plan.startDate} onChange={(e) => setPlan({ startDate: e.target.value })} />
+            <TextInput type="date" value={plan.startDate} onChange={(e) => { if (isPlausibleDate(e.target.value)) setPlan({ startDate: e.target.value }); }} />
           </Field>
           <Field label="End date">
-            <TextInput type="date" value={plan.endDate} onChange={(e) => setPlan({ endDate: e.target.value })} />
+            <TextInput type="date" value={plan.endDate} onChange={(e) => { if (isPlausibleDate(e.target.value)) setPlan({ endDate: e.target.value }); }} />
           </Field>
         </div>
         <Field label="Breakdown">
