@@ -380,16 +380,21 @@ export const useMediaPlanStore = create<MediaPlanState>()(
 
       loadPlan: (data) => set({
         plan: data.plan,
-        // Backfill channel ids for plan files saved before this field existed
+        // Backfill channel ids, and rename the old 'Amazon' channel string
+        // to 'Amazon Ads', for plan files saved before those changes shipped
         // (the persist `migrate` above only runs on localStorage rehydration,
-        // not on an explicit file import).
+        // not on an explicit file import / saved-plan load).
         scenarios: data.scenarios.map((s) => ({
           ...s,
           markets: s.markets.map((m) => ({
             ...m,
             goals: m.goals.map((g) => ({
               ...g,
-              channels: g.channels.map((c) => ({ ...c, id: c.id ?? uid() })),
+              channels: g.channels.map((c) => ({
+                ...c,
+                id: c.id ?? uid(),
+                channel: ((c.channel as string) === 'Amazon' ? 'Amazon Ads' : c.channel) as Channel,
+              })),
             })),
           })),
         })),
@@ -403,12 +408,19 @@ export const useMediaPlanStore = create<MediaPlanState>()(
     }),
     {
       name: 'nmq-media-plan-builder-store',
-      version: 1,
+      version: 2,
       // v0 → v1: ChannelConfig gained a stable `id` (needed so a goal can hold
       // multiple instances of the same channel, e.g. two LinkedIn line items).
       // Plans saved before this change have channels with no `id` at all —
       // backfill one so every per-channel store action (which now targets by
       // id, not by channel name) can still find them.
+      // v1 → v2: the 'Amazon' channel got renamed to 'Amazon Ads' shortly
+      // after it shipped. Plans saved in that short window still have the
+      // literal old string persisted — every PHASE_COLS/BENCH_FIELDS lookup
+      // is keyed by the new name, so an unmigrated channel silently resolves
+      // to zero columns (an empty Excel export, a blank benchmark editor)
+      // instead of erroring. Rewrite it in place rather than requiring
+      // affected plans to remove and re-add the channel.
       migrate: (persistedState) => {
         const state = persistedState as { plan: PlanConfig; scenarios: Scenario[]; activeScenarioId: string };
         if (!state?.scenarios) return state;
@@ -420,7 +432,11 @@ export const useMediaPlanStore = create<MediaPlanState>()(
               ...m,
               goals: m.goals.map((g) => ({
                 ...g,
-                channels: g.channels.map((c) => ({ ...c, id: c.id ?? uid() })),
+                channels: g.channels.map((c) => ({
+                  ...c,
+                  id: c.id ?? uid(),
+                  channel: ((c.channel as string) === 'Amazon' ? 'Amazon Ads' : c.channel) as Channel,
+                })),
               })),
             })),
           })),
