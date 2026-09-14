@@ -3,8 +3,15 @@
 import { useMemo, useState } from 'react';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
 import { aggregateScenarioMetrics } from '@/lib/mediaplan/calc';
-import { ADDITIVE, COL_FMT, DONUT_PALETTE } from '@/lib/mediaplan/constants';
+import { ADDITIVE, COL_FMT, DONUT_PALETTE, colLabel } from '@/lib/mediaplan/constants';
 import type { Scenario } from '@/lib/mediaplan/types';
+
+// See GrandTotals.tsx: "conversions"/"cpa" mean Orders/Cost per Order only
+// for an Amazon-Ads-only scenario, Leads/Cost per Lead otherwise.
+function soleChannelOf(s: Scenario) {
+  const channels = new Set(s.markets.flatMap((m) => m.goals.flatMap((g) => g.channels.map((c) => c.channel))));
+  return channels.size === 1 ? [...channels][0] : undefined;
+}
 
 const BAR_METRICS = ['impressions', 'reach', 'clicks', 'sessions', 'conversions'];
 
@@ -40,6 +47,8 @@ export function CompareTab({ scenarios }: { scenarios: Scenario[] }) {
 
   const activeCols = ADDITIVE.filter((c) => c !== 'Budget' && compareData.some((s) => (aggregates.get(s.id)?.[c] ?? 0) > 0));
   const barMetrics = BAR_METRICS.filter((m) => compareData.some((s) => (aggregates.get(s.id)?.[m] ?? 0) > 0));
+  const compareSoleChannels = new Set(compareData.map(soleChannelOf));
+  const compareSoleChannel = compareSoleChannels.size === 1 ? [...compareSoleChannels][0] : undefined;
 
   async function generateAiCompare() {
     setLoading(true);
@@ -69,7 +78,7 @@ export function CompareTab({ scenarios }: { scenarios: Scenario[] }) {
               <tr className="bg-ink-50 text-left text-ink-500">
                 <th className="px-2 py-1.5">Scenario</th>
                 <th className="px-2 py-1.5">Budget (€)</th>
-                {activeCols.map((c) => <th key={c} className="whitespace-nowrap px-2 py-1.5">{COL_FMT[c].label}</th>)}
+                {activeCols.map((c) => <th key={c} className="whitespace-nowrap px-2 py-1.5">{colLabel(c, compareSoleChannel)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -96,7 +105,7 @@ export function CompareTab({ scenarios }: { scenarios: Scenario[] }) {
             const best = vals.reduce((a, b) => (b[1] > a[1] ? b : a));
             return (
               <div key={c} className="rounded-md border border-ink-200 bg-ink-50 px-3 py-2 text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">{COL_FMT[c].label}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">{colLabel(c, compareSoleChannel)}</p>
                 <p className="text-xs font-bold text-ink-900">{best[0]}</p>
               </div>
             );
@@ -113,7 +122,7 @@ export function CompareTab({ scenarios }: { scenarios: Scenario[] }) {
               const max = Math.max(...vals, 1);
               return (
                 <div key={metric} className="rounded-md border border-ink-100 p-3">
-                  <p className="mb-2 text-center text-xs font-bold text-ink-700">{COL_FMT[metric].label}</p>
+                  <p className="mb-2 text-center text-xs font-bold text-ink-700">{colLabel(metric, compareSoleChannel)}</p>
                   <div className="space-y-1.5">
                     {compareData.map((s, i) => (
                       <div key={s.id} className="flex items-center gap-2">

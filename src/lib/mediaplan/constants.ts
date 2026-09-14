@@ -1,4 +1,4 @@
-import type { Benchmark, BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat } from './types';
+import type { AmazonFormat, Benchmark, BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat } from './types';
 
 export const MARKET_LABELS: Record<string, string> = {
   AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', HR: 'Croatia', CY: 'Cyprus',
@@ -158,6 +158,10 @@ export const BENCH_HELP: Record<string, string> = {
   open_rate: 'Sponsored Message / Conversation Ad: % of sends that are opened.',
   form_completion_rate: 'Lead Gen Form: % of ad clicks that complete and submit the LinkedIn form.',
   roas: 'Return on ad spend — revenue generated per €1 spent, as a multiple (e.g. 4.5 for 4.5x). Amazon Sponsored Products/Brands typically run 3x–6x depending on category maturity.',
+  units_per_order: 'Average number of SKU units per order — e.g. 1.3 if roughly 3 in 10 orders are for two units. Separate from Orders since one order can contain multiple units.',
+  dpv_rate: 'Sponsored Brands/Display only: % of ad clicks that result in a tracked Detail Page View.',
+  atc_rate: 'Sponsored Brands/Display only: % of Detail Page Views that add the product to cart.',
+  new_to_brand_pct: 'Sponsored Brands/Display only: % of orders/sales from customers who haven’t purchased this brand on Amazon in the past 12 months.',
 };
 
 export const DONUT_PALETTE = [
@@ -168,7 +172,7 @@ export const DONUT_PALETTE = [
 export const ADDITIVE = [
   'Budget', 'impressions', 'reach', 'views', 'clicks', 'sessions',
   'conversions', 'mql', 'sql', 'sends', 'opens', 'cta_clicks', 'form_completions',
-  'purchases', 'revenue',
+  'revenue', 'units', 'detail_page_views', 'add_to_cart', 'new_to_brand_orders',
 ];
 
 export const COL_FMT: Record<string, { label: string; fmt: (x: number) => string }> = {
@@ -203,14 +207,39 @@ export const COL_FMT: Record<string, { label: string; fmt: (x: number) => string
   cost_per_send: { label: 'Cost per Send (€)', fmt: (x) => `€${x.toFixed(4)}` },
   cost_per_open: { label: 'Cost per Open (€)', fmt: (x) => `€${x.toFixed(4)}` },
   cta_ctr: { label: 'CTA CTR', fmt: (x) => `${(x * 100).toFixed(2)}%` },
-  purchases: { label: 'Purchases', fmt: (x) => Math.round(x).toLocaleString() },
-  cost_per_purchase: { label: 'Cost per Purchase (€)', fmt: (x) => `€${x.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
   revenue: { label: 'Revenue (€)', fmt: (x) => `€${x.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
   roas: { label: 'ROAS', fmt: (x) => `${x.toFixed(2)}x` },
+  units: { label: 'Units Sold', fmt: (x) => Math.round(x).toLocaleString() },
+  detail_page_views: { label: 'Detail Page Views', fmt: (x) => Math.round(x).toLocaleString() },
+  add_to_cart: { label: 'Add-to-Cart', fmt: (x) => Math.round(x).toLocaleString() },
+  new_to_brand_orders: { label: 'New-to-Brand Orders', fmt: (x) => Math.round(x).toLocaleString() },
+  new_to_brand_pct: { label: 'New-to-Brand %', fmt: (x) => `${(x * 100).toFixed(0)}%` },
 };
 
+// 'conversions'/'cpa' mean "Leads"/"Cost per Lead" everywhere EXCEPT Amazon
+// Ads, which is always a direct-to-consumer channel regardless of the plan's
+// overall B2B/B2C audience setting — Search/LinkedIn/YouTube/Display stay
+// lead-gen metrics no matter what (this plan sells tires on Amazon directly,
+// but still runs LinkedIn/Search for lead generation, not sales).
+export function colLabel(key: string, channel?: Channel): string {
+  if (channel === 'Amazon Ads') {
+    if (key === 'conversions') return 'Orders';
+    if (key === 'cpa') return 'Cost per Order (€)';
+  }
+  return COL_FMT[key]?.label ?? key;
+}
+
 const TRAFFIC_COLS = ['Budget', 'impressions', 'eff_cpm', 'clicks', 'cpc', 'ctr', 'click_to_session', 'sessions'];
-const AMAZON_COLS = ['Budget', 'impressions', 'clicks', 'ctr', 'cpc', 'conv_rate', 'purchases', 'cost_per_purchase', 'revenue', 'roas'];
+// Amazon always reports Orders/Revenue/ROAS/Units on every campaign type,
+// regardless of stated goal or the plan's overall audience setting — there's
+// no separate session/lead step, so this one column set covers all 3 goals.
+const AMAZON_COLS = ['Budget', 'impressions', 'clicks', 'ctr', 'cpc', 'conv_rate', 'conversions', 'cpa', 'revenue', 'roas', 'units'];
+// Sponsored Brands/Sponsored Display report two extra mid-funnel signals that
+// Sponsored Products doesn't have at all (its ads land straight on the
+// product's own detail page) — appended only for those formats, never as a
+// blanket Amazon Ads column, so Sponsored Products blocks don't show blank/
+// N-A cells that read as a bug.
+const AMAZON_DPV_TAIL = ['detail_page_views', 'add_to_cart', 'new_to_brand_orders', 'new_to_brand_pct'];
 const CONVERSION_COLS = [
   'Budget', 'impressions', 'eff_cpm', 'clicks', 'cpc', 'ctr', 'click_to_session', 'sessions',
   'conv_rate', 'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql',
@@ -255,15 +284,29 @@ export const PHASE_COLS: Record<string, string[]> = {
   'Display|Awareness': ['Budget', 'impressions', 'reach', 'eff_cpm', 'ctr', 'clicks', 'cpc'],
   'Display|Traffic': TRAFFIC_COLS,
   'Display|Conversion': CONVERSION_COLS,
-  // Amazon reports purchases/ROAS on every campaign type regardless of
-  // stated goal (a Sponsored Brands campaign run "for awareness" still
-  // shows purchases in Amazon's own dashboard) — unlike Search/YouTube/
-  // Display, there's no separate session/lead step, so the same column
-  // set applies across all three goals.
+  // Amazon reports Orders/ROAS on every campaign type regardless of stated
+  // goal (a Sponsored Brands campaign run "for awareness" still shows orders
+  // in Amazon's own dashboard) — unlike Search/YouTube/Display, there's no
+  // separate session/lead step, so the same column set applies across all
+  // three goals. The Sponsored Brands/Display DPV/Add-to-Cart tail is
+  // appended by phaseColsFor() below, not here — it doesn't apply to
+  // Sponsored Products at all.
   'Amazon Ads|Awareness': AMAZON_COLS,
   'Amazon Ads|Traffic': AMAZON_COLS,
   'Amazon Ads|Conversion': AMAZON_COLS,
 };
+
+/** The actual column set for a channel/goal table — PHASE_COLS above holds
+ *  the base; this only ever appends anything for Amazon Ads, whose Sponsored
+ *  Brands/Display formats report two extra mid-funnel columns Sponsored
+ *  Products doesn't have. Every other channel's columns are exactly its
+ *  PHASE_COLS entry, unconditionally. */
+export function phaseColsFor(channelKey: ChannelKey, goal: Goal, amazonFormat?: AmazonFormat): string[] {
+  const base = PHASE_COLS[`${channelKey}|${goal}`] ?? [];
+  if (channelKey !== 'Amazon Ads') return base;
+  const showDpv = amazonFormat === 'Sponsored Brands' || amazonFormat === 'Sponsored Display';
+  return showDpv ? [...base, ...AMAZON_DPV_TAIL] : base;
+}
 
 export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
   'YouTube|Awareness': ['cpm', 'view_rate', 'ctr', 'frequency'],
@@ -290,10 +333,28 @@ export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
   'Display|Awareness': ['cpm', 'ctr', 'frequency'],
   'Display|Traffic': ['cpm', 'ctr', 'click_to_session'],
   'Display|Conversion': ['cpm', 'ctr', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
-  'Amazon Ads|Awareness': ['cpc', 'ctr', 'conv_rate', 'roas'],
-  'Amazon Ads|Traffic': ['cpc', 'ctr', 'conv_rate', 'roas'],
-  'Amazon Ads|Conversion': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  // Amazon Ads always gets the commerce assumption set — no B2B
+  // lead_to_mql/mql_to_sql variant exists for it. The Sponsored Brands/
+  // Display DPV/Add-to-Cart/New-to-Brand inputs are appended by
+  // benchFieldsFor() below, not here.
+  'Amazon Ads|Awareness': ['cpc', 'ctr', 'conv_rate', 'roas', 'units_per_order'],
+  'Amazon Ads|Traffic': ['cpc', 'ctr', 'conv_rate', 'roas', 'units_per_order'],
+  'Amazon Ads|Conversion': ['cpc', 'ctr', 'conv_rate', 'roas', 'units_per_order'],
 };
+
+const AMAZON_DPV_BENCH_TAIL: BenchmarkField[] = ['dpv_rate', 'atc_rate', 'new_to_brand_pct'];
+
+/** The actual benchmark input fields for a channel/goal — mirrors
+ *  phaseColsFor(): only Amazon Ads ever appends anything beyond its
+ *  BENCH_FIELDS entry (the Sponsored Brands/Display DPV/Add-to-Cart/
+ *  New-to-Brand inputs). Every other channel is exactly its BENCH_FIELDS
+ *  entry, unconditionally. */
+export function benchFieldsFor(channelKey: ChannelKey, goal: Goal, amazonFormat?: AmazonFormat): BenchmarkField[] {
+  const base = BENCH_FIELDS[`${channelKey}|${goal}`] ?? [];
+  if (channelKey !== 'Amazon Ads') return base;
+  const showDpv = amazonFormat === 'Sponsored Brands' || amazonFormat === 'Sponsored Display';
+  return showDpv ? [...base, ...AMAZON_DPV_BENCH_TAIL] : base;
+}
 
 export const BENCH_FIELD_DESC: Record<string, string> = {
   cpm: 'Cost per thousand impressions in EUR (e.g. 12.5). For Sponsored Message: cost per send in EUR (e.g. 0.50)',
@@ -308,6 +369,10 @@ export const BENCH_FIELD_DESC: Record<string, string> = {
   open_rate: 'Sponsored/Conversation Message open rate as decimal proportion (e.g. 0.35 for 35%)',
   form_completion_rate: 'Lead Gen Form / Document Ad: % of clicks that complete the form, as decimal (e.g. 0.08 for 8%)',
   roas: 'Return on ad spend as a multiple, NOT a percentage (e.g. 4.5 for 4.5x return)',
+  units_per_order: 'Average SKU units per order, as a decimal (e.g. 1.3), NOT a percentage',
+  dpv_rate: 'Sponsored Brands/Display only: % of ad clicks resulting in a Detail Page View, as decimal (e.g. 0.85 for 85%)',
+  atc_rate: 'Sponsored Brands/Display only: % of Detail Page Views that Add to Cart, as decimal (e.g. 0.12 for 12%)',
+  new_to_brand_pct: 'Sponsored Brands/Display only: % of orders from customers new to the brand on Amazon, as decimal (e.g. 0.65 for 65%)',
 };
 
 export const PRESET_DESC: Record<string, string> = {
@@ -318,7 +383,7 @@ export const PRESET_DESC: Record<string, string> = {
 
 export const BENCH_IS_PCT = new Set<BenchmarkField>([
   'ctr', 'view_rate', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql',
-  'open_rate', 'form_completion_rate',
+  'open_rate', 'form_completion_rate', 'dpv_rate', 'atc_rate', 'new_to_brand_pct',
 ]);
 
 /** LinkedIn's ChannelKey depends on its creative format — mirrors the

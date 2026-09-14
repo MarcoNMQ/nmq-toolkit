@@ -1,6 +1,6 @@
 import { ADDITIVE } from './constants';
 import { channelBudget } from './budgets';
-import type { Benchmark, Breakdown, Channel, Goal, KpiRow, LinkedInFormat, Period, PeriodRow, Scenario } from './types';
+import type { AmazonFormat, Benchmark, Breakdown, Channel, Goal, KpiRow, LinkedInFormat, Period, PeriodRow, Scenario } from './types';
 
 function fmtDayMonth(d: Date): string {
   return d.toLocaleDateString('en-GB', { month: 'short', day: '2-digit' }).replace(',', '');
@@ -69,7 +69,7 @@ export function generatePeriods(start: string, end: string, breakdown: Breakdown
  *  has a structurally different funnel (Search has sessions, LinkedIn
  *  Sponsored Message has no session step at all, etc). Keep this in sync
  *  with media_plan.py's calc_row if the source ever changes. */
-export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Channel, convRate: number, liFormat?: LinkedInFormat): KpiRow {
+export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Channel, convRate: number, liFormat?: LinkedInFormat, amazonFormat?: AmazonFormat): KpiRow {
   if (budget <= 0) return { Budget: budget };
   const r: KpiRow = { Budget: budget };
 
@@ -101,23 +101,43 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
       });
     }
   } else if (channel === 'Amazon Ads') {
-    // Amazon has no separate session/lead step — purchases attribute
-    // directly to ad clicks, and ROAS/revenue replace the CPA/MQL/SQL
-    // funnel tail entirely. Same cpc-driven shape as Search (clicks first,
-    // impressions derived from CTR) since both are CPC-bid.
+    // Amazon has no separate session/lead step, and always reports retail
+    // KPIs (Orders/Revenue/ROAS/Units) regardless of the plan's overall
+    // audience setting — it's a direct-to-consumer channel by nature, unlike
+    // Search/LinkedIn/YouTube/Display which stay lead-gen metrics even in a
+    // B2C-labeled plan. `conversions`/`cpa` are the same fields Search etc.
+    // use for Leads — colLabel() in constants.ts relabels them "Orders"/
+    // "Cost per Order" for this channel specifically. Same cpc-driven shape
+    // as Search (clicks first, impressions derived from CTR) since both are
+    // CPC-bid.
     const cpc = bm.cpc ?? 0.60;
     const ctr = bm.ctr ?? 0.0035;
-    const convRate2 = bm.conv_rate ?? 0.11;
+    const cr = bm.conv_rate ?? 0.11;
     const roas = bm.roas ?? 4.5;
+    const upo = bm.units_per_order ?? 1.3;
     if (cpc <= 0) return r;
     const clicks = budget / cpc;
     const impressions = ctr > 0 ? clicks / ctr : 0;
-    const purchases = clicks * convRate2;
+    const orders = clicks * cr;
     Object.assign(r, {
-      impressions, clicks, cpc, ctr,
-      conv_rate: convRate2, purchases, cost_per_purchase: purchases > 0 ? budget / purchases : 0,
-      revenue: budget * roas, roas,
+      impressions, clicks, cpc, ctr, conv_rate: cr,
+      conversions: orders, cpa: orders > 0 ? budget / orders : 0,
+      revenue: budget * roas, roas, units: orders * upo,
     });
+    // Detail Page Views/Add-to-Cart/New-to-Brand only apply to Sponsored
+    // Brands and Sponsored Display — Amazon doesn't report them for
+    // Sponsored Products at all (its ads land straight on the product's own
+    // detail page, no separate view event to attribute).
+    if (amazonFormat === 'Sponsored Brands' || amazonFormat === 'Sponsored Display') {
+      const dpvRate = bm.dpv_rate ?? 0.85;
+      const atcRate = bm.atc_rate ?? 0.12;
+      const ntbPct = bm.new_to_brand_pct ?? 0.65;
+      const dpv = clicks * dpvRate;
+      Object.assign(r, {
+        detail_page_views: dpv, add_to_cart: dpv * atcRate,
+        new_to_brand_orders: orders * ntbPct, new_to_brand_pct: ntbPct,
+      });
+    }
   } else if (channel === 'LinkedIn' && (liFormat === 'Sponsored Message / Conversational Ad' || liFormat === 'Conversation Ad')) {
     // Everything stays inside LinkedIn — no sessions metric. cpm field is
     // repurposed as "cost per send", ctr as "CTA click rate out of opens".
@@ -231,7 +251,7 @@ function isPeriodActive(p: Period, activeFrom?: string, activeTo?: string): bool
 
 export function buildTable(
   periods: Period[], totalBudget: number, bm: Benchmark, goal: Goal, channel: Channel, convRate: number,
-  liFormat?: LinkedInFormat, activeFrom?: string, activeTo?: string,
+  liFormat?: LinkedInFormat, activeFrom?: string, activeTo?: string, amazonFormat?: AmazonFormat,
 ): PeriodRow[] {
   const totalDays = periods.reduce((n, p) => n + p.days, 0) || 1;
   const activePeriods = periods.filter((p) => isPeriodActive(p, activeFrom, activeTo));
@@ -240,13 +260,13 @@ export function buildTable(
   const rows: PeriodRow[] = periods.map((p) => {
     const active = isPeriodActive(p, activeFrom, activeTo);
     const bud = active ? (totalBudget * p.days) / activeDays : 0;
-    const m = calcRow(bud, bm, goal, channel, convRate, liFormat);
+    const m = calcRow(bud, bm, goal, channel, convRate, liFormat, amazonFormat);
     return { Period: p.label, Days: p.days, ...m };
   });
   // The TOTAL row always reflects the channel's full allocated budget,
   // regardless of timing window — the window only changes HOW it's spread
   // across periods, not how much the channel gets overall.
-  const totalRow: PeriodRow = { Period: 'TOTAL', Days: totalDays, ...calcRow(totalBudget, bm, goal, channel, convRate, liFormat) };
+  const totalRow: PeriodRow = { Period: 'TOTAL', Days: totalDays, ...calcRow(totalBudget, bm, goal, channel, convRate, liFormat, amazonFormat) };
   return [...rows, totalRow];
 }
 
@@ -266,7 +286,7 @@ export function aggregateScenarioMetrics(scenario: Scenario): Record<string, num
       goal.channels.forEach((ch) => {
         const budget = channelBudget(scenario, market, goal, ch.splitPct);
         const convRate = ch.benchmark.conv_rate ?? 0.02;
-        const row = calcRow(budget, ch.benchmark, goal.goal, ch.channel, convRate, ch.liFormat);
+        const row = calcRow(budget, ch.benchmark, goal.goal, ch.channel, convRate, ch.liFormat, ch.amazonFormat);
         ADDITIVE.forEach((c) => {
           const v = (row as unknown as Record<string, number | undefined>)[c];
           if (typeof v === 'number') totals[c] += v;

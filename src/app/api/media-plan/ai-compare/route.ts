@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { aggregateScenarioMetrics } from '@/lib/mediaplan/calc';
-import { ADDITIVE, COL_FMT, MARKET_LABELS } from '@/lib/mediaplan/constants';
+import { ADDITIVE, COL_FMT, MARKET_LABELS, colLabel } from '@/lib/mediaplan/constants';
 import type { PlanConfig, Scenario } from '@/lib/mediaplan/types';
 
 export async function POST(req: NextRequest) {
@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
       const channels = new Set(s.markets.flatMap((m) => m.goals.filter((g) => g.goal === goalName).flatMap((g) => g.channels.map((c) => c.channel))));
       lines.push(`  Goal: ${goalName} | Channels: ${[...channels].join(', ')}`);
     });
+    const allChannels = new Set(s.markets.flatMap((m) => m.goals.flatMap((g) => g.channels.map((c) => c.channel))));
+    const soleChannel = allChannels.size === 1 ? [...allChannels][0] : undefined;
     lines.push('  Aggregated KPIs:');
-    ADDITIVE.forEach((c) => { if ((agg[c] ?? 0) > 0) lines.push(`    ${COL_FMT[c].label}: ${COL_FMT[c].fmt(agg[c])}`); });
+    ADDITIVE.forEach((c) => { if ((agg[c] ?? 0) > 0) lines.push(`    ${colLabel(c, soleChannel)}: ${COL_FMT[c].fmt(agg[c])}`); });
     return lines.join('\n');
   }
 

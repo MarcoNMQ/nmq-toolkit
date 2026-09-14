@@ -1,12 +1,12 @@
 'use client';
 
-import { COL_FMT, PHASE_COLS, channelKeyFor } from '@/lib/mediaplan/constants';
-import type { Channel, Goal, LinkedInFormat, PeriodRow } from '@/lib/mediaplan/types';
+import { COL_FMT, colLabel, phaseColsFor, channelKeyFor } from '@/lib/mediaplan/constants';
+import type { AmazonFormat, Channel, Goal, LinkedInFormat, PeriodRow } from '@/lib/mediaplan/types';
 
-export function PeriodTable({ rows, channel, goal, liFormat }: { rows: PeriodRow[]; channel: Channel; goal: Goal; liFormat?: LinkedInFormat }) {
+export function PeriodTable({ rows, channel, goal, liFormat, amazonFormat }: { rows: PeriodRow[]; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; amazonFormat?: AmazonFormat }) {
   const key = channelKeyFor(channel, liFormat);
-  const colOrder = PHASE_COLS[`${key}|${goal}`];
-  const cols = (colOrder ?? Object.keys(COL_FMT)).filter((c) => c in COL_FMT);
+  const colOrder = phaseColsFor(key, goal, amazonFormat);
+  const cols = (colOrder.length ? colOrder : Object.keys(COL_FMT)).filter((c) => c in COL_FMT);
 
   return (
     <div className="overflow-x-auto rounded-md border border-ink-100">
@@ -15,7 +15,7 @@ export function PeriodTable({ rows, channel, goal, liFormat }: { rows: PeriodRow
           <tr className="bg-ink-50 text-left text-ink-500">
             <th className="px-2 py-1.5 font-semibold">Period</th>
             {cols.map((c) => (
-              <th key={c} className="whitespace-nowrap px-2 py-1.5 font-semibold">{COL_FMT[c].label}</th>
+              <th key={c} className="whitespace-nowrap px-2 py-1.5 font-semibold">{colLabel(c, channel)}</th>
             ))}
           </tr>
         </thead>

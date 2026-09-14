@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { BENCH_FIELD_DESC, BENCH_FIELDS, BENCH_IS_PCT, MARKET_LABELS, PRESET_DESC, channelKeyFor } from '@/lib/mediaplan/constants';
+import { BENCH_FIELD_DESC, BENCH_IS_PCT, MARKET_LABELS, PRESET_DESC, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
 import type { AmazonFormat, BenchmarkField, Channel, Goal, LinkedInFormat } from '@/lib/mediaplan/types';
 
 // Direct port of _apply_bench_preset_ai() in media_plan.py — asks Claude
@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   };
 
   const key = channelKeyFor(channel, liFormat);
-  const fields = BENCH_FIELDS[`${key}|${goal}`] ?? ['cpm', 'ctr'];
+  const resolvedFields = benchFieldsFor(key, goal, amazonFormat);
+  const fields: BenchmarkField[] = resolvedFields.length ? resolvedFields : ['cpm', 'ctr'];
   const properties: Record<string, { type: string; description: string }> = {};
   fields.forEach((f) => { properties[f] = { type: 'number', description: BENCH_FIELD_DESC[f] }; });
 

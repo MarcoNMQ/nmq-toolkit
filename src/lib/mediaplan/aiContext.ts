@@ -1,6 +1,6 @@
 import { aggregateScenarioMetrics } from './calc';
 import { goalBudget, marketBudget } from './budgets';
-import { ADDITIVE, COL_FMT, MARKET_LABELS } from './constants';
+import { ADDITIVE, COL_FMT, MARKET_LABELS, colLabel } from './constants';
 import type { PlanConfig, Scenario } from './types';
 
 // Direct port of build_plan_summary() in media_plan.py — a plain-text
@@ -57,7 +57,7 @@ export function buildPlanSummary(scenario: Scenario, plan: PlanConfig): string {
         } else if (chName === 'Amazon Ads') {
           if (ref.cpc) parts.push(`CPC €${ref.cpc.toFixed(2)}`);
           if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(2)}%`);
-          if (ref.conv_rate) parts.push(`Click→Purchase ${(ref.conv_rate * 100).toFixed(1)}%`);
+          if (ref.conv_rate) parts.push(`Click→Order ${(ref.conv_rate * 100).toFixed(1)}%`);
           if (ref.roas) parts.push(`ROAS ${ref.roas.toFixed(1)}x`);
         } else {
           if (ref.cpm) parts.push(`CPM €${ref.cpm.toFixed(2)}`);
@@ -72,9 +72,11 @@ export function buildPlanSummary(scenario: Scenario, plan: PlanConfig): string {
   });
 
   const agg = aggregateScenarioMetrics(scenario);
+  const allChannels = new Set(scenario.markets.flatMap((m) => m.goals.flatMap((g) => g.channels.map((c) => c.channel))));
+  const soleChannel = allChannels.size === 1 ? [...allChannels][0] : undefined;
   lines.push('Aggregated KPIs:');
   ADDITIVE.forEach((c) => {
-    if ((agg[c] ?? 0) > 0) lines.push(`  ${COL_FMT[c].label}: ${COL_FMT[c].fmt(agg[c])}`);
+    if ((agg[c] ?? 0) > 0) lines.push(`  ${colLabel(c, soleChannel)}: ${COL_FMT[c].fmt(agg[c])}`);
   });
 
   return lines.join('\n');

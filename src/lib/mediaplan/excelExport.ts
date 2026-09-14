@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { generatePeriods } from './calc';
 import { marketBudget, goalBudget, channelBudget } from './budgets';
-import { ADDITIVE, BENCH_FIELDS, COL_FMT, MARKET_LABELS, PHASE_COLS, channelKeyFor } from './constants';
+import { ADDITIVE, MARKET_LABELS, benchFieldsFor, channelKeyFor, colLabel, phaseColsFor } from './constants';
 import type { BenchmarkField, Channel, ChannelKey, Goal, LinkedInFormat, PlanConfig, Period, Scenario } from './types';
 
 // Mirrors calc.ts's isPeriodActive() — a period counts as active for a
@@ -20,8 +20,8 @@ function isPeriodActive(p: Period, activeFrom?: string, activeTo?: string): bool
 // editable model — changing a yellow assumption cell recalculates
 // everything downstream of it, exactly like the original.
 
-const PCT_KEYS = new Set(['ctr', 'view_rate', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql', 'cvr', 'open_rate', 'form_completion_rate']);
-const EUR_KEYS = new Set(['Budget', 'cpc', 'cpa', 'cpv', 'eff_cpm', 'cost_per_mql', 'cost_per_sql', 'cost_per_send', 'cost_per_open', 'cost_per_purchase', 'revenue']);
+const PCT_KEYS = new Set(['ctr', 'view_rate', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql', 'cvr', 'open_rate', 'form_completion_rate', 'new_to_brand_pct']);
+const EUR_KEYS = new Set(['Budget', 'cpc', 'cpa', 'cpv', 'eff_cpm', 'cost_per_mql', 'cost_per_sql', 'cost_per_send', 'cost_per_open', 'revenue']);
 const ADDITIVE_SET = new Set(ADDITIVE);
 
 const RATE_FROM: Record<string, [string, string]> = {
@@ -31,14 +31,16 @@ const RATE_FROM: Record<string, [string, string]> = {
   lead_to_mql: ['mql', 'conversions'],
   mql_to_sql: ['sql', 'mql'],
 };
-// Amazon's blended conv_rate/ROAS at the "all markets combined" level must
-// be recomputed from the summed additive columns (purchases/clicks,
-// revenue/Budget) — a single flat benchmark cell can't represent multiple
-// markets' different assumptions. Base RATE_FROM's ctr entry already works
-// unchanged since ctr = clicks/impressions regardless of channel.
+// Amazon's blended conv_rate/ROAS/New-to-Brand % at the "all markets
+// combined" level must be recomputed from the summed additive columns
+// (conversions/clicks, revenue/Budget, new_to_brand_orders/conversions) — a
+// single flat benchmark cell can't represent multiple markets' different
+// assumptions. Base RATE_FROM's ctr entry already works unchanged since
+// ctr = clicks/impressions regardless of channel.
 const RATE_FROM_AMAZON: Record<string, [string, string]> = {
-  conv_rate: ['purchases', 'clicks'],
+  conv_rate: ['conversions', 'clicks'],
   roas: ['revenue', 'Budget'],
+  new_to_brand_pct: ['new_to_brand_orders', 'conversions'],
 };
 const RATE_FROM_SM: Record<string, [string, string]> = {
   open_rate: ['opens', 'sends'],
@@ -66,16 +68,18 @@ const BM_LABELS: Record<string, string> = {
   ctr: 'CTR / CTA Click Rate', frequency: 'Frequency',
   click_to_session: 'Click→Session', open_rate: 'Open Rate',
   form_completion_rate: 'Form Completion Rate',
-  conv_rate: 'Session→Lead % / CTA→Lead % / Click→Purchase %',
+  conv_rate: 'Session→Lead % / CTA→Lead % / Click→Order %',
   lead_to_mql: 'Lead→MQL %', mql_to_sql: 'MQL→SQL %',
-  roas: 'ROAS (x)',
+  roas: 'ROAS (x)', units_per_order: 'Units per Order',
+  dpv_rate: 'Click→DPV %', atc_rate: 'DPV→Add-to-Cart %', new_to_brand_pct: 'New-to-Brand %',
 };
 const BM_NUM_FMT: Record<string, string> = {
   cpm: '#,##0.0000', cpc: '#,##0.00', view_rate: '0.00%',
   ctr: '0.00%', frequency: '0.0', click_to_session: '0%',
   open_rate: '0.0%', form_completion_rate: '0.0%',
   conv_rate: '0.00%', lead_to_mql: '0%', mql_to_sql: '0%',
-  roas: '0.00"x"',
+  roas: '0.00"x"', units_per_order: '0.00',
+  dpv_rate: '0.0%', atc_rate: '0.0%', new_to_brand_pct: '0.0%',
 };
 
 function colLetter(n: number): string {
@@ -122,10 +126,18 @@ function formula(key: string, colMap: Record<string, string>, bmMap: Record<stri
     if (key === 'ctr') return ie(`${ref('clicks')}/${ref('impressions')}`);
     if (key === 'cpc') return ie(`${ref('Budget')}/${ref('clicks')}`);
     if (key === 'conv_rate') return `${bm('conv_rate')}`;
-    if (key === 'purchases') return ie(`${ref('clicks')}*${bm('conv_rate')}`);
-    if (key === 'cost_per_purchase') return ie(`${ref('Budget')}/${ref('purchases')}`);
+    if (key === 'conversions') return ie(`${ref('clicks')}*${bm('conv_rate')}`);
+    if (key === 'cpa') return ie(`${ref('Budget')}/${ref('conversions')}`);
     if (key === 'roas') return `${bm('roas')}`;
     if (key === 'revenue') return ie(`${ref('Budget')}*${bm('roas')}`);
+    if (key === 'units') return ie(`${ref('conversions')}*${bm('units_per_order')}`);
+    // Sponsored Brands/Display only — never requested for Sponsored
+    // Products since phaseColsFor()/benchFieldsFor() never include these
+    // keys for that format.
+    if (key === 'detail_page_views') return ie(`${ref('clicks')}*${bm('dpv_rate')}`);
+    if (key === 'add_to_cart') return ie(`${ref('detail_page_views')}*${bm('atc_rate')}`);
+    if (key === 'new_to_brand_pct') return `${bm('new_to_brand_pct')}`;
+    if (key === 'new_to_brand_orders') return ie(`${ref('conversions')}*${bm('new_to_brand_pct')}`);
     return null;
   }
 
@@ -175,7 +187,7 @@ function totalFormula(key: string, colMap: Record<string, string>, bmMap: Record
   const rateKeysSm = ['open_rate', 'conv_rate', 'lead_to_mql', 'mql_to_sql'];
   const rateKeysLgf = ['form_completion_rate', 'lead_to_mql', 'mql_to_sql'];
   const rateKeysStd = ['click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'];
-  const rateKeysAmazon = ['conv_rate', 'roas'];
+  const rateKeysAmazon = ['conv_rate', 'roas', 'new_to_brand_pct'];
   if (ch === 'LinkedIn' && (liFmt === 'Sponsored Message / Conversational Ad' || liFmt === 'Conversation Ad')) {
     if (rateKeysSm.includes(key)) return `${bmMap[key] ?? '0'}`;
   } else if (ch === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) {
@@ -215,7 +227,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
     const maxDataCols = Math.max(
       ...scenario.markets.flatMap((m) => m.goals.flatMap((g) => g.channels.map((c) => {
         const key = channelKeyFor(c.channel, c.liFormat);
-        return (PHASE_COLS[`${key}|${g.goal}`] ?? []).length;
+        return phaseColsFor(key, g.goal, c.amazonFormat).length;
       }))),
       8,
     );
@@ -261,7 +273,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           const chBud = channelBudget(scenario, market, goal, chCfg.splitPct);
           const liFmt = chCfg.channel === 'LinkedIn' ? chCfg.liFormat : undefined;
           const key: ChannelKey = channelKeyFor(chCfg.channel, liFmt);
-          const colKeys = PHASE_COLS[`${key}|${goalName}`] ?? [];
+          const colKeys = phaseColsFor(key, goalName, chCfg.amazonFormat);
           const nChCols = colKeys.length + 1;
           const colMap: Record<string, string> = {};
           colKeys.forEach((k, i) => { colMap[k] = colLetter(2 + i); });
@@ -280,7 +292,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           ws.getRow(row).height = 18;
           row += 1;
 
-          const bmParams = BENCH_FIELDS[`${key}|${goalName}`] ?? [];
+          const bmParams = benchFieldsFor(key, goalName, chCfg.amazonFormat);
           c = ws.getCell(row, 1);
           c.value = 'ASSUMPTIONS  —  edit the yellow cells to recalculate the whole table';
           c.fill = C_ASSM_H; c.font = { italic: true, size: 9, color: { argb: 'FF375623' } }; c.alignment = AL;
@@ -316,7 +328,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           c.fill = C_HDR; c.font = { color: WHITE, bold: true }; c.alignment = AC;
           colKeys.forEach((k, i) => {
             const cc = ws.getCell(row, 2 + i);
-            cc.value = COL_FMT[k]?.label ?? k;
+            cc.value = colLabel(k, chCfg.channel);
             cc.fill = C_HDR; cc.font = { color: WHITE, bold: true }; cc.alignment = AC;
           });
           ws.getRow(row).height = 28;
@@ -417,7 +429,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
         c.fill = C_HDR; c.alignment = AC;
         colKeys.forEach((k, i) => {
           const cc = ws.getCell(row, 2 + i);
-          cc.value = COL_FMT[k]?.label ?? k;
+          cc.value = colLabel(k, chName as Channel);
           cc.fill = C_HDR; cc.font = { color: WHITE, bold: true }; cc.alignment = AC;
         });
         ws.getRow(row).height = 28;

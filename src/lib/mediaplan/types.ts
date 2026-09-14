@@ -14,12 +14,14 @@ export type LinkedInFormat =
   | 'Document Ad'
   | 'Lead Gen Form';
 
-// Amazon has sub-formats too (Sponsored Products, Sponsored Brands), but
-// unlike LinkedIn's they share an identical KPI funnel — clicks/purchases
-// math doesn't change between them, only the label does — so this is just
-// metadata on ChannelConfig, not a ChannelKey split (mirrors how LinkedIn's
-// own Static/Video/Carousel formats stay on the plain 'LinkedIn' key).
-export type AmazonFormat = 'Sponsored Products' | 'Sponsored Brands';
+// Amazon has sub-formats too (Sponsored Products, Sponsored Brands,
+// Sponsored Display), but unlike LinkedIn's they mostly share an identical
+// KPI funnel — clicks/orders math doesn't change between them, only the
+// label does — so this is just metadata on ChannelConfig, not a ChannelKey
+// split (mirrors how LinkedIn's own Static/Video/Carousel formats stay on
+// the plain 'LinkedIn' key). Sponsored Brands/Display additionally report a
+// Detail Page View/Add-to-Cart/New-to-Brand tail Sponsored Products doesn't.
+export type AmazonFormat = 'Sponsored Products' | 'Sponsored Brands' | 'Sponsored Display';
 
 // The "effective channel key" used to look up benchmark fields / column
 // layout — LinkedIn splits into 4 keys depending on format, everything
@@ -39,8 +41,17 @@ export interface Benchmark {
   open_rate?: number;
   form_completion_rate?: number;
   // Return on ad spend (revenue / spend, as a multiple e.g. 4.5 for 4.5x) —
-  // Amazon Sponsored Products/Brands' headline efficiency metric.
+  // Amazon Ads' headline efficiency metric.
   roas?: number;
+  // Average SKU units per order — Amazon-only, separate from the order
+  // count itself since one order can include multiple units.
+  units_per_order?: number;
+  // Sponsored Brands/Display-only mid-funnel inputs — Amazon doesn't report
+  // these for Sponsored Products at all (its ads land straight on the
+  // product's own detail page, no separate DPV/ATC event to attribute).
+  dpv_rate?: number;
+  atc_rate?: number;
+  new_to_brand_pct?: number;
 }
 
 export type BenchmarkField = keyof Benchmark;
@@ -158,13 +169,19 @@ export interface KpiRow {
   cta_clicks?: number;
   form_completions?: number;
   form_completion_rate?: number;
-  // Amazon Sponsored Products/Brands funnel tail — purchases attributed
-  // directly to ad clicks, plus the revenue/ROAS pair (no MQL/SQL step;
-  // Amazon doesn't have a separate lead-qualification stage).
-  purchases?: number;
-  cost_per_purchase?: number;
+  // Amazon Ads funnel tail — orders attribute directly to ad clicks (via the
+  // shared `conversions`/`cpa` fields above, labeled "Orders"/"Cost per
+  // Order" for this channel — see colLabel() in constants.ts), plus
+  // revenue/ROAS/units (no MQL/SQL step; Amazon doesn't have a lead-
+  // qualification stage). detail_page_views/add_to_cart/new_to_brand_*
+  // only populate for Sponsored Brands/Display line items.
   revenue?: number;
   roas?: number;
+  units?: number;
+  detail_page_views?: number;
+  add_to_cart?: number;
+  new_to_brand_orders?: number;
+  new_to_brand_pct?: number;
 }
 
 export interface PeriodRow extends KpiRow {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BENCH_FIELDS, BENCH_HELP, BENCH_IS_PCT, channelKeyFor } from '@/lib/mediaplan/constants';
+import { BENCH_HELP, BENCH_IS_PCT, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
 import type { Channel, ChannelConfig, Goal } from '@/lib/mediaplan/types';
 
@@ -19,7 +19,7 @@ export function BenchmarkEditor({
   const [aiError, setAiError] = useState<string | null>(null);
 
   const key = channelKeyFor(channel, channelConfig.liFormat);
-  const fields = BENCH_FIELDS[`${key}|${goal}`] ?? [];
+  const fields = benchFieldsFor(key, goal, channelConfig.amazonFormat);
 
   async function applyAiPreset(preset: typeof PRESETS[number]) {
     setAiLoading(true);

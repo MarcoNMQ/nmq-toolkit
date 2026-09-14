@@ -12,7 +12,7 @@ import { Select } from '@/components/Field';
 import type { AmazonFormat, GoalConfig, LinkedInFormat, MarketConfig, Scenario } from '@/lib/mediaplan/types';
 
 const LI_FORMATS = ['Static', 'Video', 'Carousel', 'Sponsored Message / Conversational Ad', 'Conversation Ad', 'Document Ad', 'Lead Gen Form'] as const;
-const AMAZON_FORMATS = ['Sponsored Products', 'Sponsored Brands'] as const;
+const AMAZON_FORMATS = ['Sponsored Products', 'Sponsored Brands', 'Sponsored Display'] as const;
 
 export function ChannelSection({
   scenario, market, goal, channelIndex, audience, industry,
@@ -41,9 +41,9 @@ export function ChannelSection({
   const rows = useMemo(
     () => buildTable(
       periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate,
-      channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo,
+      channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo, channelConfig.amazonFormat,
     ),
-    [periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate, channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo],
+    [periods, budget, channelConfig.benchmark, goal.goal, channelConfig.channel, convRate, channelConfig.liFormat, channelConfig.activeFrom, channelConfig.activeTo, channelConfig.amazonFormat],
   );
   const totalRow = rows[rows.length - 1];
 
@@ -111,10 +111,10 @@ export function ChannelSection({
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="min-w-0">
-          <PeriodTable rows={rows} channel={channelConfig.channel} goal={goal.goal} liFormat={channelConfig.liFormat} />
+          <PeriodTable rows={rows} channel={channelConfig.channel} goal={goal.goal} liFormat={channelConfig.liFormat} amazonFormat={channelConfig.amazonFormat} />
         </div>
         <div className="min-w-0">
-          <Funnel totalRow={totalRow} channel={channelConfig.channel} goal={goal.goal} liFormat={channelConfig.liFormat} />
+          <Funnel totalRow={totalRow} channel={channelConfig.channel} goal={goal.goal} liFormat={channelConfig.liFormat} amazonFormat={channelConfig.amazonFormat} />
         </div>
       </div>
     </div>

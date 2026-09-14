@@ -1,14 +1,20 @@
 'use client';
 
 import { CH_COLORS } from '@/lib/mediaplan/constants';
-import type { Channel, Goal, KpiRow, LinkedInFormat } from '@/lib/mediaplan/types';
+import type { AmazonFormat, Channel, Goal, KpiRow, LinkedInFormat } from '@/lib/mediaplan/types';
 
 /** Direct port of make_funnel()'s stage selection in media_plan.py, just
  *  rendered as CSS bars instead of a Plotly funnel chart (no charting
  *  dependency needed for the same value+percent-of-first-stage display). */
-function stagesFor(channel: Channel, goal: Goal, liFormat?: LinkedInFormat): [string, keyof KpiRow][] {
+function stagesFor(channel: Channel, goal: Goal, liFormat?: LinkedInFormat, amazonFormat?: AmazonFormat): [string, keyof KpiRow][] {
   if (channel === 'Amazon Ads') {
-    return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Purchases', 'purchases']];
+    if (amazonFormat === 'Sponsored Brands' || amazonFormat === 'Sponsored Display') {
+      return [
+        ['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Detail Page Views', 'detail_page_views'],
+        ['Add-to-Cart', 'add_to_cart'], ['Orders', 'conversions'],
+      ];
+    }
+    return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Orders', 'conversions']];
   }
   if (channel === 'Search') {
     if (goal === 'Awareness') return [['Impressions', 'impressions'], ['Clicks', 'clicks']];
@@ -34,8 +40,8 @@ function stagesFor(channel: Channel, goal: Goal, liFormat?: LinkedInFormat): [st
   return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions'], ['Conversions', 'conversions']];
 }
 
-export function Funnel({ totalRow, channel, goal, liFormat, title }: { totalRow: KpiRow; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; title?: string }) {
-  const stages = stagesFor(channel, goal, liFormat);
+export function Funnel({ totalRow, channel, goal, liFormat, amazonFormat, title }: { totalRow: KpiRow; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; amazonFormat?: AmazonFormat; title?: string }) {
+  const stages = stagesFor(channel, goal, liFormat, amazonFormat);
   const colors = CH_COLORS[channel];
   const values = stages.map(([, key]) => (totalRow[key] as number | undefined) ?? 0);
   const first = values[0] || 1;
