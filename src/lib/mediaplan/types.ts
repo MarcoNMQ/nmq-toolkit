@@ -1,4 +1,4 @@
-export type Channel = 'YouTube' | 'LinkedIn' | 'Search' | 'Display' | 'Amazon';
+export type Channel = 'YouTube' | 'LinkedIn' | 'Search' | 'Display' | 'Amazon Ads';
 export type Goal = 'Awareness' | 'Traffic' | 'Conversion';
 export type Breakdown = 'Daily' | 'Weekly' | 'Bi-Weekly' | 'Monthly';
 export type Audience = 'B2B' | 'B2C';

@@ -10,7 +10,7 @@ export function uid(): string {
 
 function newChannelConfig(market: string, channel: Channel, splitPct = 100): ChannelConfig {
   const liFormat: LinkedInFormat | undefined = channel === 'LinkedIn' ? 'Static' : undefined;
-  const amazonFormat: AmazonFormat | undefined = channel === 'Amazon' ? 'Sponsored Products' : undefined;
+  const amazonFormat: AmazonFormat | undefined = channel === 'Amazon Ads' ? 'Sponsored Products' : undefined;
   return {
     id: uid(),
     channel,

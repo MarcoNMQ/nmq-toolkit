@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   fields.forEach((f) => { properties[f] = { type: 'number', description: BENCH_FIELD_DESC[f] }; });
 
   const chLabel = channel === 'LinkedIn' && liFormat ? `LinkedIn (${liFormat})`
-    : channel === 'Amazon' && amazonFormat ? `Amazon (${amazonFormat})`
+    : channel === 'Amazon Ads' && amazonFormat ? `Amazon Ads (${amazonFormat})`
     : channel;
 
   const toolDef = {

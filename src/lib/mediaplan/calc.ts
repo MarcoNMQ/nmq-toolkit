@@ -100,7 +100,7 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
         mql_to_sql: m2s, sql, cost_per_sql: sql > 0 ? budget / sql : 0,
       });
     }
-  } else if (channel === 'Amazon') {
+  } else if (channel === 'Amazon Ads') {
     // Amazon has no separate session/lead step — purchases attribute
     // directly to ad clicks, and ROAS/revenue replace the CPA/MQL/SQL
     // funnel tail entirely. Same cpc-driven shape as Search (clicks first,

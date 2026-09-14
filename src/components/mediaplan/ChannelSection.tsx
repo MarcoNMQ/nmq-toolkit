@@ -63,7 +63,7 @@ export function ChannelSection({
               {LI_FORMATS.map((f) => <option key={f}>{f}</option>)}
             </Select>
           )}
-          {channelConfig.channel === 'Amazon' && (
+          {channelConfig.channel === 'Amazon Ads' && (
             <Select
               value={channelConfig.amazonFormat ?? 'Sponsored Products'}
               onChange={(e) => setChannelAmazonFormat(scenario.id, market.market, goal.goal, channelConfig.id, e.target.value as AmazonFormat)}

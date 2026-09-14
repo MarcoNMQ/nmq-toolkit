@@ -53,7 +53,7 @@ export function importLegacyPlan(raw: Record<string, unknown>): { plan: PlanConf
       if (!raw[`sb_goal_${goal}_${sid}`]) return;
       // 'amz' never matches any key in a legacy file — Amazon didn't exist
       // in the old Streamlit tool, so it always filters out below.
-      const channelFlags: Record<Channel, string> = { YouTube: 'yt', Search: 's', LinkedIn: 'li', Display: 'dis', Amazon: 'amz' };
+      const channelFlags: Record<Channel, string> = { YouTube: 'yt', Search: 's', LinkedIn: 'li', Display: 'dis', 'Amazon Ads': 'amz' };
       const channels = LEGACY_CHANNEL_ORDER.filter((ch) => raw[`sb_${channelFlags[ch]}_${goal}_${sid}`]);
       if (channels.length) sharedGoals.push({ goal, channels });
     });

@@ -10,7 +10,7 @@ export const MARKET_LABELS: Record<string, string> = {
 };
 
 export const ALL_GOALS: Goal[] = ['Awareness', 'Traffic', 'Conversion'];
-export const ALL_CHANNELS: Channel[] = ['YouTube', 'LinkedIn', 'Search', 'Display', 'Amazon'];
+export const ALL_CHANNELS: Channel[] = ['YouTube', 'LinkedIn', 'Search', 'Display', 'Amazon Ads'];
 
 export const MARKET_GROUPS: Record<string, string[]> = {
   DACH: ['DE', 'AT', 'CH'],
@@ -76,7 +76,7 @@ function defaultBench(
     LinkedIn: { cpm: cpmLi, ctr: ctrLi, frequency: freq, click_to_session: c2sLi, ...shared },
     Search: { cpc: cpcS, ctr: ctrS, click_to_session: c2sS, ...shared },
     Display: { cpm: cpmDis, ctr: 0.0015, frequency: 4.0, click_to_session: 0.70, ...shared },
-    Amazon: { cpc: cpcAmz, ctr: 0.0035, conv_rate: 0.11, roas: 4.5 },
+    'Amazon Ads': { cpc: cpcAmz, ctr: 0.0035, conv_rate: 0.11, roas: 4.5 },
   };
 }
 
@@ -136,7 +136,7 @@ export const CH_COLORS: Record<Channel, string[]> = {
   LinkedIn: ['#1F6152', '#2E8A72', '#4DB896', '#7DCFB0', '#A8E4D0'],
   Search: ['#4285F4', '#5A95F5', '#74A5F6', '#8EB5F7', '#A8C5F8'],
   Display: ['#B45309', '#D97706', '#F59E0B', '#FCD34D', '#FEF3C7'],
-  Amazon: ['#E47911', '#F2A93B', '#FFC266', '#FFDA99', '#FFEECC'],
+  'Amazon Ads': ['#E47911', '#F2A93B', '#FFC266', '#FFDA99', '#FFEECC'],
 };
 
 export const BENCH_PRESET_FACTORS: Record<string, Record<string, number>> = {
@@ -260,9 +260,9 @@ export const PHASE_COLS: Record<string, string[]> = {
   // shows purchases in Amazon's own dashboard) — unlike Search/YouTube/
   // Display, there's no separate session/lead step, so the same column
   // set applies across all three goals.
-  'Amazon|Awareness': AMAZON_COLS,
-  'Amazon|Traffic': AMAZON_COLS,
-  'Amazon|Conversion': AMAZON_COLS,
+  'Amazon Ads|Awareness': AMAZON_COLS,
+  'Amazon Ads|Traffic': AMAZON_COLS,
+  'Amazon Ads|Conversion': AMAZON_COLS,
 };
 
 export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
@@ -290,9 +290,9 @@ export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
   'Display|Awareness': ['cpm', 'ctr', 'frequency'],
   'Display|Traffic': ['cpm', 'ctr', 'click_to_session'],
   'Display|Conversion': ['cpm', 'ctr', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
-  'Amazon|Awareness': ['cpc', 'ctr', 'conv_rate', 'roas'],
-  'Amazon|Traffic': ['cpc', 'ctr', 'conv_rate', 'roas'],
-  'Amazon|Conversion': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  'Amazon Ads|Awareness': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  'Amazon Ads|Traffic': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  'Amazon Ads|Conversion': ['cpc', 'ctr', 'conv_rate', 'roas'],
 };
 
 export const BENCH_FIELD_DESC: Record<string, string> = {

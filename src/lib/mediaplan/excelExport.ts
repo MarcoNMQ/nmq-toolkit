@@ -116,7 +116,7 @@ function formula(key: string, colMap: Record<string, string>, bmMap: Record<stri
     return null;
   }
 
-  if (ch === 'Amazon') {
+  if (ch === 'Amazon Ads') {
     if (key === 'clicks') return ie(`${ref('Budget')}/${bm('cpc')}`);
     if (key === 'impressions') return ie(`${ref('clicks')}/${bm('ctr')}`);
     if (key === 'ctr') return ie(`${ref('clicks')}/${ref('impressions')}`);
@@ -180,7 +180,7 @@ function totalFormula(key: string, colMap: Record<string, string>, bmMap: Record
     if (rateKeysSm.includes(key)) return `${bmMap[key] ?? '0'}`;
   } else if (ch === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) {
     if (rateKeysLgf.includes(key)) return `${bmMap[key] ?? '0'}`;
-  } else if (ch === 'Amazon') {
+  } else if (ch === 'Amazon Ads') {
     if (rateKeysAmazon.includes(key)) return `${bmMap[key] ?? '0'}`;
   } else if (rateKeysStd.includes(key)) {
     return `${bmMap[key] ?? '0'}`;
@@ -271,7 +271,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           const dailyBud = chBud / activeDays;
 
           const chLabel = liFmt ? `${chCfg.channel} (${liFmt})`
-            : chCfg.channel === 'Amazon' && chCfg.amazonFormat ? `${chCfg.channel} (${chCfg.amazonFormat})`
+            : chCfg.channel === 'Amazon Ads' && chCfg.amazonFormat ? `${chCfg.channel} (${chCfg.amazonFormat})`
             : chCfg.channel;
           let c = ws.getCell(row, 1);
           c.value = `${chLabel}     Daily Budget: €${dailyBud.toFixed(2)} / day`;
@@ -402,7 +402,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
         let rateFrom = RATE_FROM;
         if (chName === 'LinkedIn' && (liFmt === 'Sponsored Message / Conversational Ad' || liFmt === 'Conversation Ad')) rateFrom = RATE_FROM_SM;
         else if (chName === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) rateFrom = RATE_FROM_LGF;
-        else if (chName === 'Amazon') rateFrom = { ...RATE_FROM, ...RATE_FROM_AMAZON };
+        else if (chName === 'Amazon Ads') rateFrom = { ...RATE_FROM, ...RATE_FROM_AMAZON };
 
         const chLabel = liFmt ? `${chName} (${liFmt})` : chName;
         let c = ws.getCell(row, 1);

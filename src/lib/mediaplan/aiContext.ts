@@ -54,7 +54,7 @@ export function buildPlanSummary(scenario: Scenario, plan: PlanConfig): string {
         if (chName === 'Search') {
           if (ref.cpc) parts.push(`CPC €${ref.cpc.toFixed(2)}`);
           if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(1)}%`);
-        } else if (chName === 'Amazon') {
+        } else if (chName === 'Amazon Ads') {
           if (ref.cpc) parts.push(`CPC €${ref.cpc.toFixed(2)}`);
           if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(2)}%`);
           if (ref.conv_rate) parts.push(`Click→Purchase ${(ref.conv_rate * 100).toFixed(1)}%`);
