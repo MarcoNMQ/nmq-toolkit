@@ -9,9 +9,10 @@ import { PeriodTable } from '@/components/mediaplan/PeriodTable';
 import { Funnel } from '@/components/mediaplan/Funnel';
 import { PeriodRangeSlider } from '@/components/mediaplan/PeriodRangeSlider';
 import { Select } from '@/components/Field';
-import type { GoalConfig, LinkedInFormat, MarketConfig, Scenario } from '@/lib/mediaplan/types';
+import type { AmazonFormat, GoalConfig, LinkedInFormat, MarketConfig, Scenario } from '@/lib/mediaplan/types';
 
 const LI_FORMATS = ['Static', 'Video', 'Carousel', 'Sponsored Message / Conversational Ad', 'Conversation Ad', 'Document Ad', 'Lead Gen Form'] as const;
+const AMAZON_FORMATS = ['Sponsored Products', 'Sponsored Brands'] as const;
 
 export function ChannelSection({
   scenario, market, goal, channelIndex, audience, industry,
@@ -19,6 +20,7 @@ export function ChannelSection({
   const plan = useMediaPlanStore((s) => s.plan);
   const setChannelSplitPctAndRebalance = useMediaPlanStore((s) => s.setChannelSplitPctAndRebalance);
   const setChannelLiFormat = useMediaPlanStore((s) => s.setChannelLiFormat);
+  const setChannelAmazonFormat = useMediaPlanStore((s) => s.setChannelAmazonFormat);
   const removeChannelInstance = useMediaPlanStore((s) => s.removeChannelInstance);
   const setChannelActiveRange = useMediaPlanStore((s) => s.setChannelActiveRange);
   const channelConfig = goal.channels[channelIndex];
@@ -59,6 +61,15 @@ export function ChannelSection({
               className="text-xs"
             >
               {LI_FORMATS.map((f) => <option key={f}>{f}</option>)}
+            </Select>
+          )}
+          {channelConfig.channel === 'Amazon' && (
+            <Select
+              value={channelConfig.amazonFormat ?? 'Sponsored Products'}
+              onChange={(e) => setChannelAmazonFormat(scenario.id, market.market, goal.goal, channelConfig.id, e.target.value as AmazonFormat)}
+              className="text-xs"
+            >
+              {AMAZON_FORMATS.map((f) => <option key={f}>{f}</option>)}
             </Select>
           )}
           {goal.channels.length > 1 && (

@@ -7,6 +7,9 @@ import type { Channel, Goal, KpiRow, LinkedInFormat } from '@/lib/mediaplan/type
  *  rendered as CSS bars instead of a Plotly funnel chart (no charting
  *  dependency needed for the same value+percent-of-first-stage display). */
 function stagesFor(channel: Channel, goal: Goal, liFormat?: LinkedInFormat): [string, keyof KpiRow][] {
+  if (channel === 'Amazon') {
+    return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Purchases', 'purchases']];
+  }
   if (channel === 'Search') {
     if (goal === 'Awareness') return [['Impressions', 'impressions'], ['Clicks', 'clicks']];
     if (goal === 'Traffic') return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions']];

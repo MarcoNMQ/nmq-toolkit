@@ -28,7 +28,7 @@ export function BenchmarkEditor({
       const res = await fetch('/api/media-plan/ai-bench-preset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ market, channel, goal, liFormat: channelConfig.liFormat, preset, audience, industry }),
+        body: JSON.stringify({ market, channel, goal, liFormat: channelConfig.liFormat, amazonFormat: channelConfig.amazonFormat, preset, audience, industry }),
       });
       if (!res.ok) throw new Error(await res.text());
       const values: Record<string, number> = await res.json();

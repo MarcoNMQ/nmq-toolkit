@@ -21,7 +21,7 @@ function isPeriodActive(p: Period, activeFrom?: string, activeTo?: string): bool
 // everything downstream of it, exactly like the original.
 
 const PCT_KEYS = new Set(['ctr', 'view_rate', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql', 'cvr', 'open_rate', 'form_completion_rate']);
-const EUR_KEYS = new Set(['Budget', 'cpc', 'cpa', 'cpv', 'eff_cpm', 'cost_per_mql', 'cost_per_sql', 'cost_per_send', 'cost_per_open']);
+const EUR_KEYS = new Set(['Budget', 'cpc', 'cpa', 'cpv', 'eff_cpm', 'cost_per_mql', 'cost_per_sql', 'cost_per_send', 'cost_per_open', 'cost_per_purchase', 'revenue']);
 const ADDITIVE_SET = new Set(ADDITIVE);
 
 const RATE_FROM: Record<string, [string, string]> = {
@@ -30,6 +30,15 @@ const RATE_FROM: Record<string, [string, string]> = {
   conv_rate: ['conversions', 'sessions'],
   lead_to_mql: ['mql', 'conversions'],
   mql_to_sql: ['sql', 'mql'],
+};
+// Amazon's blended conv_rate/ROAS at the "all markets combined" level must
+// be recomputed from the summed additive columns (purchases/clicks,
+// revenue/Budget) — a single flat benchmark cell can't represent multiple
+// markets' different assumptions. Base RATE_FROM's ctr entry already works
+// unchanged since ctr = clicks/impressions regardless of channel.
+const RATE_FROM_AMAZON: Record<string, [string, string]> = {
+  conv_rate: ['purchases', 'clicks'],
+  roas: ['revenue', 'Budget'],
 };
 const RATE_FROM_SM: Record<string, [string, string]> = {
   open_rate: ['opens', 'sends'],
@@ -46,6 +55,7 @@ const RATE_FROM_LGF: Record<string, [string, string]> = {
 };
 
 function numFmt(key: string): string {
+  if (key === 'roas') return '0.00"x"';
   if (PCT_KEYS.has(key)) return '0.00%';
   if (EUR_KEYS.has(key)) return '#,##0.00';
   return '#,##0';
@@ -56,14 +66,16 @@ const BM_LABELS: Record<string, string> = {
   ctr: 'CTR / CTA Click Rate', frequency: 'Frequency',
   click_to_session: 'Click→Session', open_rate: 'Open Rate',
   form_completion_rate: 'Form Completion Rate',
-  conv_rate: 'Session→Lead % / CTA→Lead %',
+  conv_rate: 'Session→Lead % / CTA→Lead % / Click→Purchase %',
   lead_to_mql: 'Lead→MQL %', mql_to_sql: 'MQL→SQL %',
+  roas: 'ROAS (x)',
 };
 const BM_NUM_FMT: Record<string, string> = {
   cpm: '#,##0.0000', cpc: '#,##0.00', view_rate: '0.00%',
   ctr: '0.00%', frequency: '0.0', click_to_session: '0%',
   open_rate: '0.0%', form_completion_rate: '0.0%',
   conv_rate: '0.00%', lead_to_mql: '0%', mql_to_sql: '0%',
+  roas: '0.00"x"',
 };
 
 function colLetter(n: number): string {
@@ -101,6 +113,19 @@ function formula(key: string, colMap: Record<string, string>, bmMap: Record<stri
     if (key === 'mql_to_sql') return `${bm('mql_to_sql')}`;
     if (key === 'sql') return ie(`${ref('mql')}*${bm('mql_to_sql')}`);
     if (key === 'cost_per_sql') return ie(`${ref('Budget')}/${ref('sql')}`);
+    return null;
+  }
+
+  if (ch === 'Amazon') {
+    if (key === 'clicks') return ie(`${ref('Budget')}/${bm('cpc')}`);
+    if (key === 'impressions') return ie(`${ref('clicks')}/${bm('ctr')}`);
+    if (key === 'ctr') return ie(`${ref('clicks')}/${ref('impressions')}`);
+    if (key === 'cpc') return ie(`${ref('Budget')}/${ref('clicks')}`);
+    if (key === 'conv_rate') return `${bm('conv_rate')}`;
+    if (key === 'purchases') return ie(`${ref('clicks')}*${bm('conv_rate')}`);
+    if (key === 'cost_per_purchase') return ie(`${ref('Budget')}/${ref('purchases')}`);
+    if (key === 'roas') return `${bm('roas')}`;
+    if (key === 'revenue') return ie(`${ref('Budget')}*${bm('roas')}`);
     return null;
   }
 
@@ -150,10 +175,13 @@ function totalFormula(key: string, colMap: Record<string, string>, bmMap: Record
   const rateKeysSm = ['open_rate', 'conv_rate', 'lead_to_mql', 'mql_to_sql'];
   const rateKeysLgf = ['form_completion_rate', 'lead_to_mql', 'mql_to_sql'];
   const rateKeysStd = ['click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'];
+  const rateKeysAmazon = ['conv_rate', 'roas'];
   if (ch === 'LinkedIn' && (liFmt === 'Sponsored Message / Conversational Ad' || liFmt === 'Conversation Ad')) {
     if (rateKeysSm.includes(key)) return `${bmMap[key] ?? '0'}`;
   } else if (ch === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) {
     if (rateKeysLgf.includes(key)) return `${bmMap[key] ?? '0'}`;
+  } else if (ch === 'Amazon') {
+    if (rateKeysAmazon.includes(key)) return `${bmMap[key] ?? '0'}`;
   } else if (rateKeysStd.includes(key)) {
     return `${bmMap[key] ?? '0'}`;
   }
@@ -242,7 +270,9 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
             .reduce((n, p) => n + p.days, 0) || 1;
           const dailyBud = chBud / activeDays;
 
-          const chLabel = liFmt ? `${chCfg.channel} (${liFmt})` : chCfg.channel;
+          const chLabel = liFmt ? `${chCfg.channel} (${liFmt})`
+            : chCfg.channel === 'Amazon' && chCfg.amazonFormat ? `${chCfg.channel} (${chCfg.amazonFormat})`
+            : chCfg.channel;
           let c = ws.getCell(row, 1);
           c.value = `${chLabel}     Daily Budget: €${dailyBud.toFixed(2)} / day`;
           c.fill = C_CH; c.font = { color: WHITE, bold: true }; c.alignment = AC;
@@ -372,6 +402,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
         let rateFrom = RATE_FROM;
         if (chName === 'LinkedIn' && (liFmt === 'Sponsored Message / Conversational Ad' || liFmt === 'Conversation Ad')) rateFrom = RATE_FROM_SM;
         else if (chName === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) rateFrom = RATE_FROM_LGF;
+        else if (chName === 'Amazon') rateFrom = { ...RATE_FROM, ...RATE_FROM_AMAZON };
 
         const chLabel = liFmt ? `${chName} (${liFmt})` : chName;
         let c = ws.getCell(row, 1);

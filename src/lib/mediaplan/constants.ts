@@ -10,7 +10,7 @@ export const MARKET_LABELS: Record<string, string> = {
 };
 
 export const ALL_GOALS: Goal[] = ['Awareness', 'Traffic', 'Conversion'];
-export const ALL_CHANNELS: Channel[] = ['YouTube', 'LinkedIn', 'Search', 'Display'];
+export const ALL_CHANNELS: Channel[] = ['YouTube', 'LinkedIn', 'Search', 'Display', 'Amazon'];
 
 export const MARKET_GROUPS: Record<string, string[]> = {
   DACH: ['DE', 'AT', 'CH'],
@@ -64,11 +64,19 @@ function defaultBench(
   // Display CPM is ~30% of YouTube; CTR is much lower (~0.15%) due to banner
   // format; click intent is lower so click_to_session is also lower (~0.70).
   const cpmDis = Math.round(cpmYt * 0.30 * 10) / 10;
+  // Amazon Sponsored Products/Brands CPC tracks ~55% of the same market's
+  // Google Search CPC in practice (retail-intent clicks are cheaper than
+  // generic search), which also carries the existing regional variance
+  // (DACH/Nordics premium vs Eastern EU discount) without hand-tuning 29
+  // more per-market numbers. CTR/conv_rate/ROAS are flat across markets,
+  // same convention as conv_rate/lead_to_mql/mql_to_sql above.
+  const cpcAmz = Math.round(cpcS * 0.55 * 100) / 100;
   return {
     YouTube: { cpm: cpmYt, view_rate: viewRate, ctr: ctrYt, frequency: freq, click_to_session: c2sYt, ...shared },
     LinkedIn: { cpm: cpmLi, ctr: ctrLi, frequency: freq, click_to_session: c2sLi, ...shared },
     Search: { cpc: cpcS, ctr: ctrS, click_to_session: c2sS, ...shared },
     Display: { cpm: cpmDis, ctr: 0.0015, frequency: 4.0, click_to_session: 0.70, ...shared },
+    Amazon: { cpc: cpcAmz, ctr: 0.0035, conv_rate: 0.11, roas: 4.5 },
   };
 }
 
@@ -128,6 +136,7 @@ export const CH_COLORS: Record<Channel, string[]> = {
   LinkedIn: ['#1F6152', '#2E8A72', '#4DB896', '#7DCFB0', '#A8E4D0'],
   Search: ['#4285F4', '#5A95F5', '#74A5F6', '#8EB5F7', '#A8C5F8'],
   Display: ['#B45309', '#D97706', '#F59E0B', '#FCD34D', '#FEF3C7'],
+  Amazon: ['#E47911', '#F2A93B', '#FFC266', '#FFDA99', '#FFEECC'],
 };
 
 export const BENCH_PRESET_FACTORS: Record<string, Record<string, number>> = {
@@ -148,6 +157,7 @@ export const BENCH_HELP: Record<string, string> = {
   mql_to_sql: '% of MQLs accepted by sales as Sales Qualified Leads. Typical B2B: 20–40%.',
   open_rate: 'Sponsored Message / Conversation Ad: % of sends that are opened.',
   form_completion_rate: 'Lead Gen Form: % of ad clicks that complete and submit the LinkedIn form.',
+  roas: 'Return on ad spend — revenue generated per €1 spent, as a multiple (e.g. 4.5 for 4.5x). Amazon Sponsored Products/Brands typically run 3x–6x depending on category maturity.',
 };
 
 export const DONUT_PALETTE = [
@@ -158,6 +168,7 @@ export const DONUT_PALETTE = [
 export const ADDITIVE = [
   'Budget', 'impressions', 'reach', 'views', 'clicks', 'sessions',
   'conversions', 'mql', 'sql', 'sends', 'opens', 'cta_clicks', 'form_completions',
+  'purchases', 'revenue',
 ];
 
 export const COL_FMT: Record<string, { label: string; fmt: (x: number) => string }> = {
@@ -192,9 +203,14 @@ export const COL_FMT: Record<string, { label: string; fmt: (x: number) => string
   cost_per_send: { label: 'Cost per Send (€)', fmt: (x) => `€${x.toFixed(4)}` },
   cost_per_open: { label: 'Cost per Open (€)', fmt: (x) => `€${x.toFixed(4)}` },
   cta_ctr: { label: 'CTA CTR', fmt: (x) => `${(x * 100).toFixed(2)}%` },
+  purchases: { label: 'Purchases', fmt: (x) => Math.round(x).toLocaleString() },
+  cost_per_purchase: { label: 'Cost per Purchase (€)', fmt: (x) => `€${x.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+  revenue: { label: 'Revenue (€)', fmt: (x) => `€${x.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+  roas: { label: 'ROAS', fmt: (x) => `${x.toFixed(2)}x` },
 };
 
 const TRAFFIC_COLS = ['Budget', 'impressions', 'eff_cpm', 'clicks', 'cpc', 'ctr', 'click_to_session', 'sessions'];
+const AMAZON_COLS = ['Budget', 'impressions', 'clicks', 'ctr', 'cpc', 'conv_rate', 'purchases', 'cost_per_purchase', 'revenue', 'roas'];
 const CONVERSION_COLS = [
   'Budget', 'impressions', 'eff_cpm', 'clicks', 'cpc', 'ctr', 'click_to_session', 'sessions',
   'conv_rate', 'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql',
@@ -239,6 +255,14 @@ export const PHASE_COLS: Record<string, string[]> = {
   'Display|Awareness': ['Budget', 'impressions', 'reach', 'eff_cpm', 'ctr', 'clicks', 'cpc'],
   'Display|Traffic': TRAFFIC_COLS,
   'Display|Conversion': CONVERSION_COLS,
+  // Amazon reports purchases/ROAS on every campaign type regardless of
+  // stated goal (a Sponsored Brands campaign run "for awareness" still
+  // shows purchases in Amazon's own dashboard) — unlike Search/YouTube/
+  // Display, there's no separate session/lead step, so the same column
+  // set applies across all three goals.
+  'Amazon|Awareness': AMAZON_COLS,
+  'Amazon|Traffic': AMAZON_COLS,
+  'Amazon|Conversion': AMAZON_COLS,
 };
 
 export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
@@ -266,6 +290,9 @@ export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
   'Display|Awareness': ['cpm', 'ctr', 'frequency'],
   'Display|Traffic': ['cpm', 'ctr', 'click_to_session'],
   'Display|Conversion': ['cpm', 'ctr', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
+  'Amazon|Awareness': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  'Amazon|Traffic': ['cpc', 'ctr', 'conv_rate', 'roas'],
+  'Amazon|Conversion': ['cpc', 'ctr', 'conv_rate', 'roas'],
 };
 
 export const BENCH_FIELD_DESC: Record<string, string> = {
@@ -280,6 +307,7 @@ export const BENCH_FIELD_DESC: Record<string, string> = {
   mql_to_sql: 'MQL-to-SQL rate as decimal proportion (e.g. 0.30 for 30%)',
   open_rate: 'Sponsored/Conversation Message open rate as decimal proportion (e.g. 0.35 for 35%)',
   form_completion_rate: 'Lead Gen Form / Document Ad: % of clicks that complete the form, as decimal (e.g. 0.08 for 8%)',
+  roas: 'Return on ad spend as a multiple, NOT a percentage (e.g. 4.5 for 4.5x return)',
 };
 
 export const PRESET_DESC: Record<string, string> = {

@@ -26,7 +26,9 @@ export function GoalSection({ scenario, market, goal, audience, industry }: { sc
   const splitSegments = goal.channels.map((c) => {
     const sameType = goal.channels.filter((x) => x.channel === c.channel);
     const n = sameType.length > 1 ? ` #${sameType.indexOf(c) + 1}` : '';
-    const fmt = c.channel === 'LinkedIn' && c.liFormat ? ` (${c.liFormat})` : '';
+    const fmt = c.channel === 'LinkedIn' && c.liFormat ? ` (${c.liFormat})`
+      : c.channel === 'Amazon' && c.amazonFormat ? ` (${c.amazonFormat})`
+      : '';
     return {
       id: c.id,
       label: `${c.channel}${n}${fmt}`,

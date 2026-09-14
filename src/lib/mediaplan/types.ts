@@ -1,4 +1,4 @@
-export type Channel = 'YouTube' | 'LinkedIn' | 'Search' | 'Display';
+export type Channel = 'YouTube' | 'LinkedIn' | 'Search' | 'Display' | 'Amazon';
 export type Goal = 'Awareness' | 'Traffic' | 'Conversion';
 export type Breakdown = 'Daily' | 'Weekly' | 'Bi-Weekly' | 'Monthly';
 export type Audience = 'B2B' | 'B2C';
@@ -13,6 +13,13 @@ export type LinkedInFormat =
   | 'Conversation Ad'
   | 'Document Ad'
   | 'Lead Gen Form';
+
+// Amazon has sub-formats too (Sponsored Products, Sponsored Brands), but
+// unlike LinkedIn's they share an identical KPI funnel — clicks/purchases
+// math doesn't change between them, only the label does — so this is just
+// metadata on ChannelConfig, not a ChannelKey split (mirrors how LinkedIn's
+// own Static/Video/Carousel formats stay on the plain 'LinkedIn' key).
+export type AmazonFormat = 'Sponsored Products' | 'Sponsored Brands';
 
 // The "effective channel key" used to look up benchmark fields / column
 // layout — LinkedIn splits into 4 keys depending on format, everything
@@ -31,6 +38,9 @@ export interface Benchmark {
   mql_to_sql?: number;
   open_rate?: number;
   form_completion_rate?: number;
+  // Return on ad spend (revenue / spend, as a multiple e.g. 4.5 for 4.5x) —
+  // Amazon Sponsored Products/Brands' headline efficiency metric.
+  roas?: number;
 }
 
 export type BenchmarkField = keyof Benchmark;
@@ -48,6 +58,7 @@ export interface ChannelConfig {
   splitPct: number;
   benchmark: Benchmark;
   liFormat?: LinkedInFormat;
+  amazonFormat?: AmazonFormat;
   // Optional sub-range of the plan's overall flight (ISO 'YYYY-MM-DD') during
   // which THIS channel instance actually runs — e.g. one LinkedIn format for
   // the first two weeks, a retargeting format for the next two. When unset,
@@ -147,6 +158,13 @@ export interface KpiRow {
   cta_clicks?: number;
   form_completions?: number;
   form_completion_rate?: number;
+  // Amazon Sponsored Products/Brands funnel tail — purchases attributed
+  // directly to ad clicks, plus the revenue/ROAS pair (no MQL/SQL step;
+  // Amazon doesn't have a separate lead-qualification stage).
+  purchases?: number;
+  cost_per_purchase?: number;
+  revenue?: number;
+  roas?: number;
 }
 
 export interface PeriodRow extends KpiRow {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { BENCH_FIELD_DESC, BENCH_FIELDS, BENCH_IS_PCT, MARKET_LABELS, PRESET_DESC, channelKeyFor } from '@/lib/mediaplan/constants';
-import type { BenchmarkField, Channel, Goal, LinkedInFormat } from '@/lib/mediaplan/types';
+import type { AmazonFormat, BenchmarkField, Channel, Goal, LinkedInFormat } from '@/lib/mediaplan/types';
 
 // Direct port of _apply_bench_preset_ai() in media_plan.py — asks Claude
 // for audience/industry-calibrated benchmarks instead of the flat preset
@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
   }
 
-  const { market, channel, goal, liFormat, preset, audience, industry } = await req.json() as {
-    market: string; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; preset: string; audience: string; industry: string;
+  const { market, channel, goal, liFormat, amazonFormat, preset, audience, industry } = await req.json() as {
+    market: string; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; amazonFormat?: AmazonFormat; preset: string; audience: string; industry: string;
   };
 
   const key = channelKeyFor(channel, liFormat);
@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
   const properties: Record<string, { type: string; description: string }> = {};
   fields.forEach((f) => { properties[f] = { type: 'number', description: BENCH_FIELD_DESC[f] }; });
 
-  const chLabel = channel === 'LinkedIn' && liFormat ? `LinkedIn (${liFormat})` : channel;
+  const chLabel = channel === 'LinkedIn' && liFormat ? `LinkedIn (${liFormat})`
+    : channel === 'Amazon' && amazonFormat ? `Amazon (${amazonFormat})`
+    : channel;
 
   const toolDef = {
     name: 'set_benchmarks',

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { BENCH, BENCH_PRESET_FACTORS, BENCH_FIELDS, LI_FORMAT_BENCH_DEFAULTS, channelKeyFor, type PlanTemplate } from './constants';
 import { pctFromMarketBudget } from './budgets';
-import type { AiChatKind, Channel, ChannelConfig, ChatMessage, GoalConfig, LinkedInFormat, MarketConfig, PlanConfig, Scenario } from './types';
+import type { AiChatKind, AmazonFormat, Channel, ChannelConfig, ChatMessage, GoalConfig, LinkedInFormat, MarketConfig, PlanConfig, Scenario } from './types';
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -10,6 +10,7 @@ export function uid(): string {
 
 function newChannelConfig(market: string, channel: Channel, splitPct = 100): ChannelConfig {
   const liFormat: LinkedInFormat | undefined = channel === 'LinkedIn' ? 'Static' : undefined;
+  const amazonFormat: AmazonFormat | undefined = channel === 'Amazon' ? 'Sponsored Products' : undefined;
   return {
     id: uid(),
     channel,
@@ -19,6 +20,7 @@ function newChannelConfig(market: string, channel: Channel, splitPct = 100): Cha
       ...(liFormat ? LI_FORMAT_BENCH_DEFAULTS[liFormat] : {}),
     },
     liFormat,
+    amazonFormat,
   };
 }
 
@@ -85,6 +87,7 @@ interface MediaPlanState {
   setChannelActiveRange: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, activeFrom?: string, activeTo?: string) => void;
   setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number) => void;
   setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
+  setChannelAmazonFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: AmazonFormat) => void;
   applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
 
   // AI chat — global to the plan, not per-scenario (mirrors media_plan.py:
@@ -315,6 +318,16 @@ export const useMediaPlanStore = create<MediaPlanState>()(
             liFormat: format,
             benchmark: { ...(BENCH[market]?.LinkedIn ?? {}), ...LI_FORMAT_BENCH_DEFAULTS[format] },
           } : c)),
+        })))),
+      })),
+
+      // Unlike setChannelLiFormat, this doesn't touch the benchmark —
+      // Sponsored Products and Sponsored Brands share the exact same
+      // funnel/fields, so the format switch is purely a label.
+      setChannelAmazonFormat: (scenarioId, market, goal, channelId, format) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
+          ...g,
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, amazonFormat: format } : c)),
         })))),
       })),
 

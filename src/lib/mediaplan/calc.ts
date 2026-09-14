@@ -100,6 +100,24 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
         mql_to_sql: m2s, sql, cost_per_sql: sql > 0 ? budget / sql : 0,
       });
     }
+  } else if (channel === 'Amazon') {
+    // Amazon has no separate session/lead step — purchases attribute
+    // directly to ad clicks, and ROAS/revenue replace the CPA/MQL/SQL
+    // funnel tail entirely. Same cpc-driven shape as Search (clicks first,
+    // impressions derived from CTR) since both are CPC-bid.
+    const cpc = bm.cpc ?? 0.60;
+    const ctr = bm.ctr ?? 0.0035;
+    const convRate2 = bm.conv_rate ?? 0.11;
+    const roas = bm.roas ?? 4.5;
+    if (cpc <= 0) return r;
+    const clicks = budget / cpc;
+    const impressions = ctr > 0 ? clicks / ctr : 0;
+    const purchases = clicks * convRate2;
+    Object.assign(r, {
+      impressions, clicks, cpc, ctr,
+      conv_rate: convRate2, purchases, cost_per_purchase: purchases > 0 ? budget / purchases : 0,
+      revenue: budget * roas, roas,
+    });
   } else if (channel === 'LinkedIn' && (liFormat === 'Sponsored Message / Conversational Ad' || liFormat === 'Conversation Ad')) {
     // Everything stays inside LinkedIn — no sessions metric. cpm field is
     // repurposed as "cost per send", ctr as "CTA click rate out of opens".

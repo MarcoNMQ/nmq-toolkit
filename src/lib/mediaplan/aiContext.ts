@@ -42,7 +42,7 @@ export function buildPlanSummary(scenario: Scenario, plan: PlanConfig): string {
     channelsForGoal.forEach((chName) => {
       // First market using this channel/goal — used as the "reference"
       // benchmark, same simplification the Python source makes.
-      let ref: { cpm?: number; cpc?: number; ctr?: number; frequency?: number; view_rate?: number } | undefined;
+      let ref: { cpm?: number; cpc?: number; ctr?: number; frequency?: number; view_rate?: number; conv_rate?: number; roas?: number } | undefined;
       scenario.markets.some((m) => {
         const g = m.goals.find((gg) => gg.goal === goalName);
         const c = g?.channels.find((cc) => cc.channel === chName);
@@ -54,6 +54,11 @@ export function buildPlanSummary(scenario: Scenario, plan: PlanConfig): string {
         if (chName === 'Search') {
           if (ref.cpc) parts.push(`CPC €${ref.cpc.toFixed(2)}`);
           if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(1)}%`);
+        } else if (chName === 'Amazon') {
+          if (ref.cpc) parts.push(`CPC €${ref.cpc.toFixed(2)}`);
+          if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(2)}%`);
+          if (ref.conv_rate) parts.push(`Click→Purchase ${(ref.conv_rate * 100).toFixed(1)}%`);
+          if (ref.roas) parts.push(`ROAS ${ref.roas.toFixed(1)}x`);
         } else {
           if (ref.cpm) parts.push(`CPM €${ref.cpm.toFixed(2)}`);
           if (ref.ctr) parts.push(`CTR ${(ref.ctr * 100).toFixed(2)}%`);
@@ -87,6 +92,10 @@ YOUTUBE
 LINKEDIN
 - LinkedIn Marketing Solutions Blog (official): https://business.linkedin.com/marketing-solutions/blog
 - Dreamdata LinkedIn Ads B2B Benchmarks: https://dreamdata.io/linkedin-ads-b2b-benchmarks
+
+AMAZON ADS
+- Amazon Ads Benchmark Report 2025-2026 (Tinuiti/Adpulse-style aggregators for Sponsored Products/Brands CPC, CTR, ROAS)
+- Amazon Advertising official Benchmark guidance: https://advertising.amazon.com/library
 
 SEARCH & DISPLAY
 - WordStream Google Ads Benchmarks 2025: https://www.wordstream.com/blog/2025-google-ads-benchmarks
