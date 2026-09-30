@@ -10,6 +10,7 @@ import {
 import { COUNTRY_OPTIONS } from '@/lib/campaign/constants';
 import { Field, MultiToggle, Select, TextInput } from '@/components/Field';
 import { BriefingImportPanel } from '@/components/campaign/BriefingImportPanel';
+import { fbSiblings, findFbCampaignConflicts } from '@/lib/campaign/fbGrouping';
 import type { FbCampaign } from '@/lib/campaign/types';
 
 export function FbCampaignForm({ campaignId }: { campaignId: string }) {
@@ -17,8 +18,20 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
   const update = useBuilderStore((s) => s.updateFbCampaign);
   const removeCampaign = useBuilderStore((s) => s.removeFbCampaign);
   const setSelected = useBuilderStore((s) => s.setSelected);
+  const allCampaigns = useBuilderStore((s) => s.fbCampaigns);
+  const applySettingsFrom = useBuilderStore((s) => s.applyFbCampaignSettingsFrom);
 
   if (!campaign) return null;
+
+  // Other ad sets with the same campaign name = same Meta campaign.
+  const siblings = fbSiblings(allCampaigns, campaignId);
+  const owner = siblings[0];
+  const isOwner = owner?.id === campaignId;
+  const conflicts = siblings.length > 1
+    ? findFbCampaignConflicts({ key: '', name: owner.campaign_name, cards: siblings })
+    : [];
+  const exportName = owner?.campaign_name.trim() ?? '';
+  const spelledDifferently = siblings.length > 1 && campaign.campaign_name.trim() !== exportName;
 
   function patch(p: Partial<FbCampaign>) {
     update(campaignId, p);
@@ -42,6 +55,47 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
       </details>
 
       <h2 className="text-2xl font-extrabold tracking-tight text-ink-900">Campaign</h2>
+
+      {siblings.length > 1 && (
+        <div className="rounded-md border border-mint-300 bg-mint-100 px-4 py-3 text-sm text-ink-700">
+          <p>
+            <span className="font-semibold">Shared campaign:</span> {siblings.length} ad sets use this campaign name, so they
+            export as one campaign in Meta. Campaign settings (objective, budget, bid strategy, status, dates) apply to all of them.
+          </p>
+          {spelledDifferently && (
+            <p className="mt-1 text-xs text-ink-500">Exported as &ldquo;{exportName}&rdquo; (the first ad set&rsquo;s spelling).</p>
+          )}
+        </div>
+      )}
+
+      {conflicts.length > 0 && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-semibold">These campaign settings don&rsquo;t match across the {siblings.length} ad sets, so export is blocked:</p>
+          <ul className="mt-1 list-disc pl-5 text-xs">
+            {conflicts.map((c) => (
+              <li key={c.field}>{c.label}: {c.values.join(' vs ')}</li>
+            ))}
+          </ul>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {!isOwner && (
+              <button
+                type="button"
+                className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                onClick={() => applySettingsFrom(owner.id)}
+              >
+                Use the campaign&rsquo;s settings (from &ldquo;{owner.adset_name || 'first ad set'}&rdquo;)
+              </button>
+            )}
+            <button
+              type="button"
+              className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+              onClick={() => applySettingsFrom(campaignId)}
+            >
+              Apply this ad set&rsquo;s settings to all {siblings.length}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Campaign name">

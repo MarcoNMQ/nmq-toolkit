@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NETWORKS, LANGUAGES } from './constants';
+import { fbNameKey, fbSiblings, pickFbCampaignLevel } from './fbGrouping';
 import type { FbCampaign, FbAd, GoogleAd, GoogleCampaign, GoogleKeyword, GoogleSitelink, Platform, SelectedView } from './types';
 
 const STORAGE_KEY = 'nmq-campaign-builder-store';
@@ -173,6 +174,12 @@ interface BuilderState {
   updateFbCampaign: (id: string, patch: Partial<FbCampaign>) => void;
   removeFbCampaign: (id: string) => void;
   duplicateFbCampaign: (id: string) => void;
+  /** New blank ad set inside the same campaign as sourceId; returns its id. */
+  addFbAdsetToCampaign: (sourceId: string) => string;
+  /** Copy sourceId's campaign-level settings onto every ad set of its campaign. */
+  applyFbCampaignSettingsFrom: (sourceId: string) => void;
+  /** Delete every ad set that belongs to the same campaign as id. */
+  removeFbCampaignGroup: (id: string) => void;
   addFbAd: (campaignId: string) => string;
   updateFbAd: (campaignId: string, adId: string, patch: Partial<FbAd>) => void;
   removeFbAd: (campaignId: string, adId: string) => void;
@@ -339,10 +346,27 @@ export const useBuilderStore = create<BuilderState>()(
     set((state) => ({ fbCampaigns: [...state.fbCampaigns, c] }));
     return c.id;
   },
+  // Cards sharing a campaign name are ad sets of one Meta campaign, so a
+  // campaign-level edit on one of them is applied to all of them. A patch
+  // that renames the campaign never propagates: typing a name that happens
+  // to match another campaign must not overwrite either side's settings —
+  // the form offers an explicit "use these settings" action instead.
   updateFbCampaign: (id, patch) =>
-    set((state) => ({
-      fbCampaigns: state.fbCampaigns.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    })),
+    set((state) => {
+      const target = state.fbCampaigns.find((c) => c.id === id);
+      if (!target) return {};
+      const key = fbNameKey(target.campaign_name);
+      const renaming = 'campaign_name' in patch && fbNameKey(patch.campaign_name) !== key;
+      const shared = renaming || !key ? {} : pickFbCampaignLevel(patch);
+      const propagate = Object.keys(shared).length > 0;
+      return {
+        fbCampaigns: state.fbCampaigns.map((c) => {
+          if (c.id === id) return { ...c, ...patch };
+          if (propagate && fbNameKey(c.campaign_name) === key) return { ...c, ...shared };
+          return c;
+        }),
+      };
+    }),
   removeFbCampaign: (id) =>
     set((state) => ({
       fbCampaigns: state.fbCampaigns.filter((c) => c.id !== id),
@@ -356,10 +380,41 @@ export const useBuilderStore = create<BuilderState>()(
     const copy: FbCampaign = {
       ...original,
       id: uid(),
-      campaign_name: `${original.campaign_name} (Copy)`,
+      // Same campaign name → the copy is another ad set of the same
+      // campaign. The ad set gets the "(Copy)" suffix so the two stay
+      // distinct ad sets instead of Meta merging them on import.
+      adset_name: `${original.adset_name} (Copy)`,
       ads: original.ads.map((ad) => ({ ...ad, id: uid() })),
     };
     set((state) => ({ fbCampaigns: [...state.fbCampaigns, copy] }));
+  },
+  addFbAdsetToCampaign: (sourceId) => {
+    const source = get().fbCampaigns.find((c) => c.id === sourceId);
+    const c: FbCampaign = {
+      ...newFbCampaign(),
+      ...(source ? { campaign_name: source.campaign_name, ...pickFbCampaignLevel(source) } : {}),
+    };
+    set((state) => ({ fbCampaigns: [...state.fbCampaigns, c] }));
+    return c.id;
+  },
+  applyFbCampaignSettingsFrom: (sourceId) => {
+    const all = get().fbCampaigns;
+    const source = all.find((c) => c.id === sourceId);
+    if (!source) return;
+    const ids = new Set(fbSiblings(all, sourceId).map((c) => c.id));
+    const shared = pickFbCampaignLevel(source);
+    set((state) => ({
+      fbCampaigns: state.fbCampaigns.map((c) => (ids.has(c.id) ? { ...c, ...shared } : c)),
+    }));
+  },
+  removeFbCampaignGroup: (id) => {
+    const ids = new Set(fbSiblings(get().fbCampaigns, id).map((c) => c.id));
+    set((state) => ({
+      fbCampaigns: state.fbCampaigns.filter((c) => !ids.has(c.id)),
+      selected: 'campaignId' in state.selected && ids.has(state.selected.campaignId)
+        ? { type: 'welcome' }
+        : state.selected,
+    }));
   },
   addFbAd: (campaignId) => {
     const ad = newFbAd();

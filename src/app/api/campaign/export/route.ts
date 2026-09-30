@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildCsv, buildKeywordsCsv, buildSitelinksCsv } from '@/lib/campaign/builder';
 import { buildFbExcel, buildFbAdsOnlyExcel } from '@/lib/campaign/fbBuilder';
+import { fbGroupingErrors } from '@/lib/campaign/fbGrouping';
 import type { FbCampaign, GoogleCampaign } from '@/lib/campaign/types';
 
 export async function POST(req: NextRequest) {
@@ -35,6 +36,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (platform === 'facebook') {
+    // Conflicting campaign settings across same-named ad sets would make
+    // Meta reject the file or split the campaign — never hand that file out.
+    const groupingErrors = fbGroupingErrors(campaigns as FbCampaign[]);
+    if (groupingErrors.length > 0) {
+      return new NextResponse(groupingErrors.join('\n'), { status: 422 });
+    }
     const isAdsOnly = exportType === 'fb_ads_only';
     const buffer = isAdsOnly
       ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[])

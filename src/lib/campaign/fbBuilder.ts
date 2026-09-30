@@ -2,6 +2,7 @@
 
 import ExcelJS from 'exceljs';
 import { FB_HEADERS, FB_COUNTRY_ISO } from './fbConstants';
+import { groupFbCampaigns, fbGroupingErrors } from './fbGrouping';
 import type { FbCampaign } from './types';
 
 /** Convert a YYYY-MM-DD string to MM/DD/YY HH:MM for Facebook. */
@@ -15,6 +16,19 @@ function fmtFbDate(dt: string | undefined | null): string {
   return s;
 }
 
+/**
+ * Cards in export order, each paired with the card that owns its campaign
+ * settings. Ad sets of the same campaign come out contiguous, and every row
+ * of a campaign carries the SAME campaign name and campaign-level values
+ * (taken from the campaign's first ad set) — that's what makes Meta nest all
+ * of them under one campaign instead of rejecting or splitting the import.
+ */
+function exportOrder(campaigns: FbCampaign[]): { card: FbCampaign; owner: FbCampaign; name: string }[] {
+  return groupFbCampaigns(campaigns).flatMap((g) =>
+    g.cards.map((card) => ({ card, owner: g.cards[0], name: g.name })),
+  );
+}
+
 /** Convert internal country codes list to comma-separated ISO codes. */
 function toIso(codes: string[]): string {
   return codes.map((c) => FB_COUNTRY_ISO[c] ?? c).join(',');
@@ -26,31 +40,31 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
 
-  for (const camp of campaigns) {
+  for (const { card: camp, owner, name } of exportOrder(campaigns)) {
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
 
-      // Campaign level
-      row['Campaign Name'] = camp.campaign_name ?? '';
-      row['Campaign Status'] = camp.campaign_status || 'PAUSED';
+      // Campaign level — always from the campaign's owner card
+      row['Campaign Name'] = name;
+      row['Campaign Status'] = owner.campaign_status || 'PAUSED';
       row['Special Ad Categories'] = 'none';
-      row['Campaign Objective'] = camp.campaign_objective ?? '';
-      row['Buying Type'] = camp.buying_type || 'AUCTION';
-      row['Campaign Bid Strategy'] = camp.campaign_bid_strategy ?? '';
-      row['Tags'] = camp.tags ?? '';
-      row['Campaign Start Time'] = fmtFbDate(camp.campaign_start_time);
-      row['Campaign Stop Time'] = fmtFbDate(camp.campaign_stop_time);
+      row['Campaign Objective'] = owner.campaign_objective ?? '';
+      row['Buying Type'] = owner.buying_type || 'AUCTION';
+      row['Campaign Bid Strategy'] = owner.campaign_bid_strategy ?? '';
+      row['Tags'] = owner.tags ?? '';
+      row['Campaign Start Time'] = fmtFbDate(owner.campaign_start_time);
+      row['Campaign Stop Time'] = fmtFbDate(owner.campaign_stop_time);
 
-      if (camp.budget_type === 'Daily') {
-        row['Campaign Daily Budget'] = Number(camp.budget ?? 0).toFixed(2);
+      if (owner.budget_type === 'Daily') {
+        row['Campaign Daily Budget'] = Number(owner.budget ?? 0).toFixed(2);
       } else {
-        row['Campaign Lifetime Budget'] = Number(camp.budget ?? 0).toFixed(2);
+        row['Campaign Lifetime Budget'] = Number(owner.budget ?? 0).toFixed(2);
       }
 
       // Ad Set level
       row['Ad Set Run Status'] = camp.adset_status || 'PAUSED';
-      row['Ad Set Name'] = camp.adset_name ?? '';
+      row['Ad Set Name'] = (camp.adset_name ?? '').trim();
       row['Ad Set Time Start'] = fmtFbDate(camp.adset_start_time);
       row['Ad Set Time Stop'] = fmtFbDate(camp.adset_stop_time);
 
@@ -137,13 +151,13 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
     'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
   ]);
 
-  for (const camp of campaigns) {
+  for (const { card: camp, name } of exportOrder(campaigns)) {
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
 
-      row['Campaign Name'] = camp.campaign_name ?? '';
-      row['Ad Set Name'] = camp.adset_name ?? '';
+      row['Campaign Name'] = name;
+      row['Ad Set Name'] = (camp.adset_name ?? '').trim();
       row['Link'] = ad.link ?? '';
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
@@ -206,6 +220,10 @@ export function validateFbCampaigns(campaigns: FbCampaign[]): string[] {
       }
     });
   });
+
+  // Ad sets sharing a campaign name must agree on campaign settings and
+  // have distinct ad set names — see fbGrouping.ts. These block export.
+  errors.push(...fbGroupingErrors(campaigns));
 
   return errors;
 }
