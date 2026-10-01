@@ -24,4 +24,9 @@ Each tool keeps its own Zustand store with its own pre-existing localStorage key
 - `gh` CLI is not installed on this machine — repo creation/archiving was done via direct GitHub REST API calls using the token already cached by `git-credential-manager` (`git credential fill` for `host=github.com`). Avoid em-dashes or other non-ASCII characters in `curl -d` JSON payloads — they've broken GitHub's JSON parser at least once (400 "Problems parsing JSON"); use `--data-binary` and plain ASCII instead.
 
 ## API key
-Same Anthropic key as the other NMQ apps, in `.env.local` (gitignored) and as a Vercel production env var.
+Same Anthropic key as the other NMQ apps, in `.env.local` (gitignored) and as a Vercel production env var. (2026-09-30: this key was returning "credit balance is too low" — check console.anthropic.com billing if AI Copy/Insights/AI benchmarks stop working again.)
+
+## Facebook Campaign Builder: same-campaign-name grouping (2026-09-30/10-01)
+Ad sets sharing a campaign name now export as one Meta campaign, with conflicts blocked on both the UI and the server. See `.planning/facebook-campaign-test-checklist.md` for the full behaviour spec and manual test list (click-through still pending). Shipped in `0d98fdb`, live on Vercel.
+
+Marco confirmed (2026-10-01) only this Vercel deployment is used day to day — the old Streamlit Campaign Builder (`#CLAUDE\shimano_campaign_builder`) is retired, a colleague's error report from it was a stale link.
