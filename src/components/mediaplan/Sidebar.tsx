@@ -171,6 +171,9 @@ export function Sidebar() {
         <Field label="Campaign name">
           <TextInput value={plan.campaignName} onChange={(e) => setPlan({ campaignName: e.target.value })} placeholder="Q3 EU Lead Gen" />
         </Field>
+        <Field label="Client name" hint="Used to scope actuals-based benchmark suggestions to this client's own historical data.">
+          <TextInput value={plan.clientName ?? ''} onChange={(e) => setPlan({ clientName: e.target.value })} placeholder="Acme Robotics" />
+        </Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Audience">
             <Select value={plan.audience} onChange={(e) => setPlan({ audience: e.target.value as 'B2B' | 'B2C' })}>

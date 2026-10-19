@@ -123,6 +123,11 @@ export type AiChatKind = 'insights' | 'recs' | 'bench';
 
 export interface PlanConfig {
   campaignName: string;
+  // Free text, same convention as industry — identifies which client this
+  // plan belongs to. Used (so far) only to scope actuals-based benchmark
+  // suggestions to the right client's own historical data; never sent
+  // anywhere external.
+  clientName?: string;
   audience: Audience;
   industry: string;
   startDate: string;
@@ -191,4 +196,56 @@ export interface KpiRow {
 export interface PeriodRow extends KpiRow {
   Period: string;
   Days: number;
+}
+
+// ── Plan vs Actuals ────────────────────────────────────────────────────
+
+// The metric fields an imported actuals row can report. A strict subset
+// of KpiRow's additive fields — only the ones a real export is
+// realistically going to report, and the ones calc.ts's funnels actually
+// produce, so a comparison never invents a planned-vs-actual pair for a
+// metric neither side has. Includes the Sponsored Message/Conversation Ad
+// funnel's own fields (sends/opens/cta_clicks) and the Document
+// Ad/Lead Gen Form funnel's (form_completions) — those channels don't
+// report impressions/clicks in the conventional sense at all.
+export type ActualsMetricKey =
+  | 'impressions' | 'reach' | 'clicks' | 'views' | 'conversions' | 'sessions'
+  | 'sends' | 'opens' | 'cta_clicks' | 'form_completions';
+
+// One imported row of real campaign results — one market/channel/format
+// combination's reported numbers over a date range. Metric fields are
+// optional and sparse on purpose: a row only ever carries the metrics its
+// source file actually had a column for, never a zero standing in for
+// "not reported" (a missing metric must never be silently treated as 0 —
+// that would corrupt both comparisons and suggestion averages).
+export interface ActualsRow {
+  id: string;
+  // Free text as imported — comparison/matching normalizes these against
+  // the app's own vocabulary (MARKET_LABELS codes, Channel, Goal,
+  // LinkedInFormat/AmazonFormat) where recognizable, but keeps the raw
+  // string too so the import review can show exactly what was read.
+  marketRaw: string;
+  market?: string;
+  channel: Channel;
+  liFormat?: LinkedInFormat;
+  amazonFormat?: AmazonFormat;
+  goal?: Goal;
+  campaignName?: string;
+  startDate: string; // ISO 'YYYY-MM-DD'
+  endDate: string; // ISO 'YYYY-MM-DD' — same as startDate for a single-day row
+  spend: number;
+  metrics: Partial<Record<ActualsMetricKey, number>>;
+}
+
+// A named, saved import batch — one client's historical performance data,
+// built up over however many imports. Mirrors SavedPlan's shape/pattern
+// in savedPlansStore.ts, and lives behind the same kind of store module
+// so swapping localStorage for a real backend later touches one file.
+export interface ActualsDataset {
+  id: string;
+  name: string;
+  clientName: string;
+  createdAt: string;
+  updatedAt: string;
+  rows: ActualsRow[];
 }
