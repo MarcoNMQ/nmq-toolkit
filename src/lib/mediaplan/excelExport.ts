@@ -406,7 +406,7 @@ function renderChannelBlock(
 function renderChannelTotalsGroup(
   ws: ExcelJS.Worksheet, startRow: number, periods: Period[],
   chName: Channel, liFmt: LinkedInFormat | undefined, tr: Tracked,
-): { nextRow: number; totalsRowNum: number } {
+): { nextRow: number; totalsRowNum: number; periodRowNums: number[] } {
   let row = startRow;
   const { colKeys, colMap, rows: trows } = tr;
   const nChCols = colKeys.length + 1;
@@ -495,11 +495,12 @@ function renderChannelTotalsGroup(
   ws.getRow(row).height = 18;
   row += 2;
 
-  return { nextRow: row, totalsRowNum };
+  return { nextRow: row, totalsRowNum, periodRowNums: periodRowsList };
 }
 
-// One row the Overview tab will render — a live pointer at a channel tab's
-// own "ALL COUNTRIES" row, not a pre-computed value.
+// One channel/format/goal group the Overview tab will render — a live
+// pointer at a channel tab's own per-period rows and its final "ALL
+// COUNTRIES" row, not a pre-computed value.
 type OverviewGroup = {
   channelName: Channel;
   liFmt: LinkedInFormat | undefined;
@@ -508,15 +509,16 @@ type OverviewGroup = {
   colMap: Record<string, string>;
   colKeys: string[];
   totalsRow: number;
+  periodRowNums: number[];
 };
 
 function renderOverviewTab(
   ws: ExcelJS.Worksheet, scenario: Scenario, plan: PlanConfig, flight: string,
-  totalBudgetAll: number, groups: OverviewGroup[],
+  totalBudgetAll: number, groups: OverviewGroup[], periods: Period[],
 ) {
   const extraMetricsPerGroup = groups.map((g) => g.colKeys.filter((k) => k !== 'Budget' && ADDITIVE_SET.has(k)));
-  const maxExtraPairs = Math.max(0, ...extraMetricsPerGroup.map((m) => m.length));
-  const nColsTotal = Math.max(4 + maxExtraPairs * 2, 8);
+  const maxExtras = Math.max(0, ...extraMetricsPerGroup.map((m) => m.length));
+  const nColsTotal = Math.max(3 + maxExtras, 6);
 
   let row = 1;
   mergeRow(ws, nColsTotal, row, C_TITLE, { color: WHITE, bold: true, size: 13 }, `OVERVIEW  —  ${scenario.name}  —  ${plan.campaignName}`, 22);
@@ -532,10 +534,12 @@ function renderOverviewTab(
     return;
   }
 
-  mergeRow(ws, nColsTotal, row, C_GOAL, { color: WHITE, bold: true }, 'BUDGET BY CHANNEL', 18, AC);
+  // ── Grand Total Budget by Period — the overall spend phasing across every
+  // channel combined, at the same granularity (bi-weekly/monthly/...) as
+  // every channel's own tab, not just one flat end-of-flight number. ──────
+  mergeRow(ws, nColsTotal, row, C_GOAL, { color: WHITE, bold: true }, 'GRAND TOTAL BUDGET BY PERIOD', 18, AC);
   row += 1;
-
-  ['Channel / Format', 'Goal', 'Budget (€)', '% of Total'].forEach((text, i) => {
+  ['Period', 'Budget (€)', '% of Total'].forEach((text, i) => {
     const cc = ws.getCell(row, 1 + i);
     cc.value = text;
     cc.fill = C_HDR; cc.font = { color: WHITE, bold: true }; cc.alignment = AC;
@@ -543,70 +547,120 @@ function renderOverviewTab(
   ws.getRow(row).height = 22;
   row += 1;
 
-  const firstGroupRow = row;
-  const budgetRowNums: number[] = [];
-  groups.forEach((g, i) => {
+  const grandPeriodRows: number[] = [];
+  periods.forEach((p, i) => {
     const rowFill = i % 2 === 0 ? C_ODD : C_EVEN;
-    const label = g.liFmt ? `${g.channelName} (${g.liFmt})` : g.channelName;
-    const budgetCellRef = `'${g.sheetName}'!${g.colMap.Budget}${g.totalsRow}`;
-
     const cLabel = ws.getCell(row, 1);
-    cLabel.value = label; cLabel.fill = rowFill; cLabel.font = { bold: true }; cLabel.alignment = AL;
+    cLabel.value = p.label; cLabel.fill = rowFill; cLabel.font = { bold: true }; cLabel.alignment = AL;
 
-    const cGoal = ws.getCell(row, 2);
-    cGoal.value = g.goalName; cGoal.fill = rowFill; cGoal.alignment = AC;
+    const refs = groups.map((g) => `'${g.sheetName}'!${g.colMap.Budget}${g.periodRowNums[i]}`).join(', ');
+    const cBudget = ws.getCell(row, 2);
+    cBudget.value = { formula: `IFERROR(SUM(${refs}),0)` };
+    cBudget.fill = rowFill; cBudget.font = { bold: true }; cBudget.alignment = AC; cBudget.numFmt = '#,##0.00';
 
-    const cBudget = ws.getCell(row, 3);
-    cBudget.value = { formula: `IFERROR(${budgetCellRef},0)` };
-    cBudget.fill = rowFill; cBudget.font = { bold: true }; cBudget.alignment = AC;
-    cBudget.numFmt = '#,##0.00';
-    budgetRowNums.push(row);
-
-    const cPct = ws.getCell(row, 4);
+    const cPct = ws.getCell(row, 3);
     cPct.fill = rowFill; cPct.alignment = AC; cPct.numFmt = '0.0%';
     // Formula filled in below once the grand total row exists.
 
-    const extras = extraMetricsPerGroup[i];
-    extras.forEach((k, ei) => {
-      const labelCell = ws.getCell(row, 5 + ei * 2);
-      labelCell.value = colLabel(k, g.channelName);
-      labelCell.fill = rowFill; labelCell.font = { italic: true, size: 9 }; labelCell.alignment = AL;
-
-      const valueCell = ws.getCell(row, 6 + ei * 2);
-      const cellRef = `'${g.sheetName}'!${g.colMap[k]}${g.totalsRow}`;
-      valueCell.value = { formula: `IFERROR(${cellRef},0)` };
-      valueCell.fill = rowFill; valueCell.font = { bold: true }; valueCell.alignment = AC;
-      valueCell.numFmt = numFmt(k);
-    });
-
     ws.getRow(row).height = 18;
+    grandPeriodRows.push(row);
     row += 1;
   });
-  const lastGroupRow = row - 1;
+  const grandPeriodFirstRow = grandPeriodRows[0];
+  const grandPeriodLastRow = grandPeriodRows[grandPeriodRows.length - 1];
 
   const grandTotalRow = row;
   const cLabel = ws.getCell(row, 1);
-  cLabel.value = 'GRAND TOTAL'; cLabel.fill = C_TOTAL; cLabel.font = { bold: true }; cLabel.alignment = AL;
-  ws.mergeCells(row, 1, row, 2);
-  const cBudget = ws.getCell(row, 3);
-  cBudget.value = { formula: `SUM(C${firstGroupRow}:C${lastGroupRow})` };
+  cLabel.value = 'TOTAL'; cLabel.fill = C_TOTAL; cLabel.font = { bold: true }; cLabel.alignment = AL;
+  const cBudget = ws.getCell(row, 2);
+  cBudget.value = { formula: `SUM(B${grandPeriodFirstRow}:B${grandPeriodLastRow})` };
   cBudget.fill = C_TOTAL; cBudget.font = { bold: true }; cBudget.alignment = AC; cBudget.numFmt = '#,##0.00';
-  const cPct = ws.getCell(row, 4);
+  const cPct = ws.getCell(row, 3);
   cPct.value = 1;
   cPct.fill = C_TOTAL; cPct.font = { bold: true }; cPct.alignment = AC; cPct.numFmt = '0.0%';
   ws.getRow(row).height = 18;
-  row += 1;
+  row += 2;
 
-  budgetRowNums.forEach((r) => {
-    const cell = ws.getCell(r, 4);
-    cell.value = { formula: `IFERROR(C${r}/C${grandTotalRow},0)` };
+  grandPeriodRows.forEach((r) => {
+    const cell = ws.getCell(r, 3);
+    cell.value = { formula: `IFERROR(B${r}/B${grandTotalRow},0)` };
   });
 
-  ws.getColumn(1).width = 26;
+  // ── Budget by Channel — Period Detail — one period-by-period table per
+  // (channel, format, goal) group, same shape as that channel's own ALL
+  // COUNTRIES breakdown, mirrored here so every channel's phasing is
+  // visible without switching tabs. The % column shows this group's share
+  // of the OVERALL budget for that same period (cross-referencing the
+  // Grand Total section above), not its own channel's total. ────────────
+  mergeRow(ws, nColsTotal, row, C_GOAL, { color: WHITE, bold: true }, 'BUDGET BY CHANNEL — PERIOD DETAIL', 18, AC);
+  row += 1;
+
+  groups.forEach((g, gi) => {
+    const label = g.liFmt ? `${g.channelName} (${g.liFmt})` : g.channelName;
+    const extras = extraMetricsPerGroup[gi];
+    const nGroupCols = 3 + extras.length;
+
+    mergeRow(ws, nGroupCols, row, C_CH, { color: WHITE, bold: true }, `${label}  —  ${g.goalName}`, 18, AC);
+    row += 1;
+
+    ['Period', 'Budget (€)', '% of Overall'].forEach((text, i) => {
+      const cc = ws.getCell(row, 1 + i);
+      cc.value = text;
+      cc.fill = C_HDR; cc.font = { color: WHITE, bold: true }; cc.alignment = AC;
+    });
+    extras.forEach((k, ei) => {
+      const cc = ws.getCell(row, 4 + ei);
+      cc.value = colLabel(k, g.channelName);
+      cc.fill = C_HDR; cc.font = { color: WHITE, bold: true }; cc.alignment = AC;
+    });
+    ws.getRow(row).height = 22;
+    row += 1;
+
+    periods.forEach((p, i) => {
+      const rowFill = i % 2 === 0 ? C_ODD : C_EVEN;
+      const cPeriod = ws.getCell(row, 1);
+      cPeriod.value = p.label; cPeriod.fill = rowFill; cPeriod.font = { bold: true }; cPeriod.alignment = AL;
+
+      const groupPeriodRow = g.periodRowNums[i];
+      const cBud = ws.getCell(row, 2);
+      cBud.value = { formula: `IFERROR('${g.sheetName}'!${g.colMap.Budget}${groupPeriodRow},0)` };
+      cBud.fill = rowFill; cBud.font = { bold: true }; cBud.alignment = AC; cBud.numFmt = '#,##0.00';
+
+      const cPctGroup = ws.getCell(row, 3);
+      cPctGroup.value = { formula: `IFERROR(B${row}/B${grandPeriodRows[i]},0)` };
+      cPctGroup.fill = rowFill; cPctGroup.alignment = AC; cPctGroup.numFmt = '0.0%';
+
+      extras.forEach((k, ei) => {
+        const cc = ws.getCell(row, 4 + ei);
+        cc.value = { formula: `IFERROR('${g.sheetName}'!${g.colMap[k]}${groupPeriodRow},0)` };
+        cc.fill = rowFill; cc.font = { bold: true }; cc.alignment = AC; cc.numFmt = numFmt(k);
+      });
+
+      ws.getRow(row).height = 15;
+      row += 1;
+    });
+
+    const cTotalLabel = ws.getCell(row, 1);
+    cTotalLabel.value = 'TOTAL'; cTotalLabel.fill = C_STOT; cTotalLabel.font = { bold: true }; cTotalLabel.alignment = AL;
+    const cTotalBud = ws.getCell(row, 2);
+    cTotalBud.value = { formula: `IFERROR('${g.sheetName}'!${g.colMap.Budget}${g.totalsRow},0)` };
+    cTotalBud.fill = C_STOT; cTotalBud.font = { bold: true }; cTotalBud.alignment = AC; cTotalBud.numFmt = '#,##0.00';
+    const cTotalPct = ws.getCell(row, 3);
+    cTotalPct.value = { formula: `IFERROR(B${row}/B${grandTotalRow},0)` };
+    cTotalPct.fill = C_STOT; cTotalPct.font = { bold: true }; cTotalPct.alignment = AC; cTotalPct.numFmt = '0.0%';
+    extras.forEach((k, ei) => {
+      const cc = ws.getCell(row, 4 + ei);
+      cc.value = { formula: `IFERROR('${g.sheetName}'!${g.colMap[k]}${g.totalsRow},0)` };
+      cc.fill = C_STOT; cc.font = { bold: true }; cc.alignment = AC; cc.numFmt = numFmt(k);
+    });
+    ws.getRow(row).height = 18;
+    row += 2;
+  });
+
+  ws.getColumn(1).width = 18;
   ws.getColumn(2).width = 14;
-  ws.getColumn(3).width = 16;
-  ws.getColumn(4).width = 12;
-  for (let i = 5; i <= nColsTotal; i++) ws.getColumn(i).width = 16;
+  ws.getColumn(3).width = 14;
+  for (let i = 4; i <= nColsTotal; i++) ws.getColumn(i).width = 14;
 }
 
 export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Promise<Buffer> {
@@ -701,13 +755,13 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
           const tr = totalTracker.get(trackKey);
           if (!tr) return;
 
-          const { nextRow, totalsRowNum } = renderChannelTotalsGroup(ws, row, periods, channel, liFmt, tr);
+          const { nextRow, totalsRowNum, periodRowNums } = renderChannelTotalsGroup(ws, row, periods, channel, liFmt, tr);
           row = nextRow;
 
           groups.push({
             channelName: channel, liFmt, goalName,
             sheetName: `${scenarioPrefix}${channel}`.slice(0, 31),
-            colMap: tr.colMap, colKeys: tr.colKeys, totalsRow: totalsRowNum,
+            colMap: tr.colMap, colKeys: tr.colKeys, totalsRow: totalsRowNum, periodRowNums,
           });
         });
 
@@ -718,7 +772,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
       for (let i = 2; i <= nColsTotal; i++) ws.getColumn(i).width = 12;
     });
 
-    renderOverviewTab(overviewWs, scenario, plan, flight, totalBudgetAll, groups);
+    renderOverviewTab(overviewWs, scenario, plan, flight, totalBudgetAll, groups, periods);
   }
 
   const buf = await wb.xlsx.writeBuffer();
