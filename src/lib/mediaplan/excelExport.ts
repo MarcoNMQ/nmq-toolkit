@@ -49,6 +49,19 @@ const RATE_FROM_SM: Record<string, [string, string]> = {
   lead_to_mql: ['mql', 'conversions'],
   mql_to_sql: ['sql', 'mql'],
 };
+// LinkedIn Video's CPV/VTR are flat per-market assumption inputs, same as
+// every other benchmark — but at the "all markets combined" level there's
+// no single assumption cell that represents every market's own CPV/VTR, so
+// (same reasoning as Amazon's blended rates above) they must be re-derived
+// from the already-summed additive columns: blended CPV = Budget/Views,
+// blended VTR = Views/Impressions. ctr/click_to_session/conv_rate/
+// lead_to_mql/mql_to_sql reuse the base RATE_FROM map unchanged since
+// Video's funnel from clicks onward is the same shape as every other
+// impression-based channel.
+const RATE_FROM_LI_VIDEO: Record<string, [string, string]> = {
+  cpv: ['Budget', 'views'],
+  view_rate: ['views', 'impressions'],
+};
 const RATE_FROM_LGF: Record<string, [string, string]> = {
   ctr: ['clicks', 'impressions'],
   form_completion_rate: ['form_completions', 'clicks'],
@@ -64,7 +77,7 @@ function numFmt(key: string): string {
 }
 
 const BM_LABELS: Record<string, string> = {
-  cpm: 'CPM / Cost per Send (€)', cpc: 'CPC (€)', view_rate: 'View Rate',
+  cpm: 'CPM / Cost per Send (€)', cpc: 'CPC (€)', cpv: 'CPV (€)', view_rate: 'View Rate',
   ctr: 'CTR / CTA Click Rate', frequency: 'Frequency',
   click_to_session: 'Click→Session', open_rate: 'Open Rate',
   form_completion_rate: 'Form Completion Rate',
@@ -74,7 +87,7 @@ const BM_LABELS: Record<string, string> = {
   dpv_rate: 'Click→DPV %', atc_rate: 'DPV→Add-to-Cart %', new_to_brand_pct: 'New-to-Brand %',
 };
 const BM_NUM_FMT: Record<string, string> = {
-  cpm: '#,##0.0000', cpc: '#,##0.00', view_rate: '0.00%',
+  cpm: '#,##0.0000', cpc: '#,##0.00', cpv: '#,##0.0000', view_rate: '0.00%',
   ctr: '0.00%', frequency: '0.0', click_to_session: '0%',
   open_rate: '0.0%', form_completion_rate: '0.0%',
   conv_rate: '0.00%', lead_to_mql: '0%', mql_to_sql: '0%',
@@ -150,6 +163,33 @@ function formula(key: string, colMap: Record<string, string>, bmMap: Record<stri
     if (key === 'form_completion_rate') return `${bm('form_completion_rate')}`;
     if (key === 'lead_to_mql') return `${bm('lead_to_mql')}`;
     if (key === 'mql') return ie(`${ref('form_completions')}*${bm('lead_to_mql')}`);
+    if (key === 'cost_per_mql') return ie(`${ref('Budget')}/${ref('mql')}`);
+    if (key === 'mql_to_sql') return `${bm('mql_to_sql')}`;
+    if (key === 'sql') return ie(`${ref('mql')}*${bm('mql_to_sql')}`);
+    if (key === 'cost_per_sql') return ie(`${ref('Budget')}/${ref('sql')}`);
+    return null;
+  }
+
+  if (ch === 'LinkedIn' && liFmt === 'Video') {
+    // CPV-first, the reverse causal order from every other impression-
+    // based channel below: views come straight from Budget/CPV, and
+    // impressions/CPM are DERIVED from views, not the other way round.
+    if (key === 'views') return ie(`${ref('Budget')}/${bm('cpv')}`);
+    if (key === 'cpv') return `${bm('cpv')}`;
+    if (key === 'impressions') return ie(`${ref('views')}/${bm('view_rate')}`);
+    if (key === 'view_rate') return `${bm('view_rate')}`;
+    if (key === 'eff_cpm') return ie(`${ref('Budget')}/${ref('impressions')}*1000`);
+    if (key === 'reach') return ie(`${ref('impressions')}/${bm('frequency')}`);
+    if (key === 'clicks') return ie(`${ref('impressions')}*${bm('ctr')}`);
+    if (key === 'ctr') return ie(`${ref('clicks')}/${ref('impressions')}`);
+    if (key === 'cpc') return ie(`${ref('Budget')}/${ref('clicks')}`);
+    if (key === 'click_to_session') return `${bm('click_to_session')}`;
+    if (key === 'sessions') return ie(`${ref('clicks')}*${bm('click_to_session')}`);
+    if (key === 'conv_rate') return `${bm('conv_rate')}`;
+    if (key === 'conversions') return ie(`${ref('sessions')}*${bm('conv_rate')}`);
+    if (key === 'cpa') return ie(`${ref('Budget')}/${ref('conversions')}`);
+    if (key === 'lead_to_mql') return `${bm('lead_to_mql')}`;
+    if (key === 'mql') return ie(`${ref('conversions')}*${bm('lead_to_mql')}`);
     if (key === 'cost_per_mql') return ie(`${ref('Budget')}/${ref('mql')}`);
     if (key === 'mql_to_sql') return `${bm('mql_to_sql')}`;
     if (key === 'sql') return ie(`${ref('mql')}*${bm('mql_to_sql')}`);
@@ -414,6 +454,7 @@ export async function buildExcelAll(scenarios: Scenario[], plan: PlanConfig): Pr
         let rateFrom = RATE_FROM;
         if (chName === 'LinkedIn' && (liFmt === 'Sponsored Message / Conversational Ad' || liFmt === 'Conversation Ad')) rateFrom = RATE_FROM_SM;
         else if (chName === 'LinkedIn' && (liFmt === 'Document Ad' || liFmt === 'Lead Gen Form')) rateFrom = RATE_FROM_LGF;
+        else if (chName === 'LinkedIn' && liFmt === 'Video') rateFrom = { ...RATE_FROM, ...RATE_FROM_LI_VIDEO };
         else if (chName === 'Amazon Ads') rateFrom = { ...RATE_FROM, ...RATE_FROM_AMAZON };
 
         const chLabel = liFmt ? `${chName} (${liFmt})` : chName;

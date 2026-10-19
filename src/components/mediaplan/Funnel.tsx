@@ -34,7 +34,12 @@ function stagesFor(channel: Channel, goal: Goal, liFormat?: LinkedInFormat, amaz
     if (goal === 'Conversion') return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Form Completions', 'form_completions'], ['MQLs', 'mql'], ['SQLs', 'sql']];
     return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Form Completions', 'form_completions']];
   }
-  // LinkedIn Standard (Static/Video/Carousel) / Display
+  if (channel === 'LinkedIn' && liFormat === 'Video') {
+    if (goal === 'Awareness') return [['Impressions', 'impressions'], ['Reach', 'reach'], ['Views', 'views'], ['Clicks', 'clicks']];
+    if (goal === 'Traffic') return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions']];
+    return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions'], ['Conversions', 'conversions']];
+  }
+  // LinkedIn Standard (Static/Carousel) / Display
   if (goal === 'Awareness') return [['Impressions', 'impressions'], ['Reach', 'reach'], ['Clicks', 'clicks']];
   if (goal === 'Traffic') return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions']];
   return [['Impressions', 'impressions'], ['Clicks', 'clicks'], ['Sessions', 'sessions'], ['Conversions', 'conversions']];

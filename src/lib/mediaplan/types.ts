@@ -24,15 +24,19 @@ export type LinkedInFormat =
 export type AmazonFormat = 'Sponsored Products' | 'Sponsored Brands' | 'Sponsored Display';
 
 // The "effective channel key" used to look up benchmark fields / column
-// layout — LinkedIn splits into 4 keys depending on format, everything
+// layout — LinkedIn splits into 5 keys depending on format, everything
 // else is just the channel name. Mirrors media_plan.py's bench_key/ch_key.
-export type ChannelKey = Channel | 'LinkedIn_SM' | 'LinkedIn_CA' | 'LinkedIn_DA' | 'LinkedIn_LGF';
+export type ChannelKey = Channel | 'LinkedIn_SM' | 'LinkedIn_CA' | 'LinkedIn_DA' | 'LinkedIn_LGF' | 'LinkedIn_Video';
 
 export interface Benchmark {
   cpm?: number;
   cpc?: number;
   ctr?: number;
   view_rate?: number;
+  // Cost per view, EUR — LinkedIn Video only. Unlike YouTube (CPM-driven,
+  // views derived from impressions x view_rate), LinkedIn Video is bought
+  // and reported on views directly, so CPV is an input here, not an output.
+  cpv?: number;
   frequency?: number;
   click_to_session?: number;
   conv_rate?: number;

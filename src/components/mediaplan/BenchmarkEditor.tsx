@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { BENCH_HELP, BENCH_IS_PCT, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
+import { BENCH_HELP, BENCH_IS_PCT, LI_VIDEO_HELP, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
-import type { Channel, ChannelConfig, Goal } from '@/lib/mediaplan/types';
+import type { BenchmarkField, Channel, ChannelConfig, Goal } from '@/lib/mediaplan/types';
 
 const PRESETS = ['Conservative', 'Average', 'Aggressive'] as const;
+const LI_VIDEO_PRIMARY: BenchmarkField[] = ['cpv', 'view_rate'];
 
 export function BenchmarkEditor({
   scenarioId, market, goal, channel, channelConfig, audience, industry,
@@ -20,6 +21,11 @@ export function BenchmarkEditor({
 
   const key = channelKeyFor(channel, channelConfig.liFormat);
   const fields = benchFieldsFor(key, goal, channelConfig.amazonFormat);
+  const isLiVideo = channel === 'LinkedIn' && channelConfig.liFormat === 'Video';
+  const primaryFields = isLiVideo ? fields.filter((f) => LI_VIDEO_PRIMARY.includes(f)) : fields;
+  const secondaryFields = isLiVideo ? fields.filter((f) => !LI_VIDEO_PRIMARY.includes(f)) : [];
+  const cpvMissing = isLiVideo && !(channelConfig.benchmark.cpv ?? 0);
+  const vtrMissing = isLiVideo && !(channelConfig.benchmark.view_rate ?? 0);
 
   async function applyAiPreset(preset: typeof PRESETS[number]) {
     setAiLoading(true);
@@ -69,28 +75,57 @@ export function BenchmarkEditor({
         </div>
       </div>
       {aiError && <p className="mb-2 text-xs text-red-500">{aiError}</p>}
+      {isLiVideo && (cpvMissing || vtrMissing) && (
+        <p className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+          Add CPV and view rate to calculate
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {fields.map((f) => {
-          const isPct = BENCH_IS_PCT.has(f);
-          const raw = channelConfig.benchmark[f] ?? 0;
-          const display = Math.round((isPct ? raw * 100 : raw) * 10000) / 10000;
-          return (
-            <label key={f} className="flex flex-col gap-0.5 text-xs" title={BENCH_HELP[f]}>
-              <span className="font-semibold text-ink-600">{f}{isPct ? ' (%)' : ''}</span>
-              <input
-                type="number"
-                step="any"
-                value={display}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value) || 0;
-                  setField(scenarioId, market, goal, channelConfig.id, f, isPct ? v / 100 : v);
-                }}
-                className="rounded-md border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500"
-              />
-            </label>
-          );
-        })}
+        {primaryFields.map((f) => renderField(f, isLiVideo))}
       </div>
+      {isLiVideo && secondaryFields.length > 0 && (
+        <div className="mt-3">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-ink-400">Secondary metrics</span>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {secondaryFields.map((f) => renderField(f, false))}
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  // `isRequired` only ever applies to LinkedIn Video's CPV/VTR — every
+  // other field keeps the original "blank shows as 0, clearing sets 0"
+  // behavior unchanged, since no other channel treats a benchmark as
+  // "must be filled in, no invented default".
+  function renderField(f: BenchmarkField, isRequired: boolean) {
+    const isPct = BENCH_IS_PCT.has(f);
+    const raw = channelConfig.benchmark[f];
+    const showEmpty = isRequired && raw === undefined;
+    const display = showEmpty ? '' : Math.round((isPct ? (raw ?? 0) * 100 : (raw ?? 0)) * 10000) / 10000;
+    const help = (isLiVideo && LI_VIDEO_HELP[f]) || BENCH_HELP[f];
+    return (
+      <label key={f} className="flex flex-col gap-0.5 text-xs" title={help}>
+        <span className={`font-semibold ${showEmpty ? 'text-amber-700' : 'text-ink-600'}`}>
+          {f}{isPct ? ' (%)' : ''}{isRequired ? ' *' : ''}
+        </span>
+        <input
+          type="number"
+          step="any"
+          value={display}
+          placeholder={isRequired ? 'required' : undefined}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (isRequired && v === '') {
+              setField(scenarioId, market, goal, channelConfig.id, f, undefined);
+              return;
+            }
+            const n = parseFloat(v) || 0;
+            setField(scenarioId, market, goal, channelConfig.id, f, isPct ? n / 100 : n);
+          }}
+          className={`rounded-md border px-2 py-1 text-xs outline-none focus:border-brand-500 ${showEmpty ? 'border-amber-300' : 'border-ink-200'}`}
+        />
+      </label>
+    );
+  }
 }

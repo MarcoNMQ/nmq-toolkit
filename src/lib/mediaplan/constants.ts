@@ -150,6 +150,7 @@ export const BENCH_HELP: Record<string, string> = {
   cpc: 'Cost per click on Search. Ranges €0.70 (Eastern EU) to €2.90 (DACH/Nordics).',
   ctr: 'Click-through rate — % of ad impressions that result in a click.',
   view_rate: 'YouTube: % of impressions resulting in a 30-second (or full-video) view.',
+  cpv: 'Cost per view, EUR. LinkedIn Video: a view counts after 2 continuous seconds of playback with at least 50% of the video in view.',
   frequency: 'Average number of times one unique user sees your ad across the campaign.',
   click_to_session: '% of clicks that result in a tracked site session (accounts for pixel gaps and bounces).',
   conv_rate: '% of sessions that convert to a lead. Typical B2B range: 1–5%.',
@@ -230,6 +231,10 @@ export function colLabel(key: string, channel?: Channel): string {
 }
 
 const TRAFFIC_COLS = ['Budget', 'impressions', 'eff_cpm', 'clicks', 'cpc', 'ctr', 'click_to_session', 'sessions'];
+// LinkedIn Video is bought/reported on views, not impressions — eff_cpm
+// is relabeled "Planned CPM" in spirit (same column, same colLabel()) since
+// it's a calculated output here, never an input.
+const LINKEDIN_VIDEO_BASE_COLS = ['Budget', 'views', 'cpv', 'impressions', 'view_rate', 'eff_cpm', 'clicks', 'ctr', 'cpc', 'reach'];
 // Amazon always reports Orders/Revenue/ROAS/Units on every campaign type,
 // regardless of stated goal or the plan's overall audience setting — there's
 // no separate session/lead step, so this one column set covers all 3 goals.
@@ -257,6 +262,12 @@ export const PHASE_COLS: Record<string, string[]> = {
   'LinkedIn|Awareness': ['Budget', 'impressions', 'reach', 'ctr', 'clicks', 'cpc'],
   'LinkedIn|Traffic': TRAFFIC_COLS,
   'LinkedIn|Conversion': CONVERSION_COLS,
+  'LinkedIn_Video|Awareness': LINKEDIN_VIDEO_BASE_COLS,
+  'LinkedIn_Video|Traffic': [...LINKEDIN_VIDEO_BASE_COLS, 'click_to_session', 'sessions'],
+  'LinkedIn_Video|Conversion': [
+    ...LINKEDIN_VIDEO_BASE_COLS, 'click_to_session', 'sessions',
+    'conv_rate', 'conversions', 'cpa', 'lead_to_mql', 'mql', 'cost_per_mql', 'mql_to_sql', 'sql', 'cost_per_sql',
+  ],
   'LinkedIn_SM|Awareness': ['Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr'],
   'LinkedIn_SM|Traffic': ['Budget', 'sends', 'cost_per_send', 'opens', 'cost_per_open', 'open_rate', 'cta_clicks', 'ctr'],
   'LinkedIn_SM|Conversion': [
@@ -315,6 +326,9 @@ export const BENCH_FIELDS: Record<string, BenchmarkField[]> = {
   'LinkedIn|Awareness': ['cpm', 'ctr', 'frequency'],
   'LinkedIn|Traffic': ['cpm', 'ctr', 'click_to_session'],
   'LinkedIn|Conversion': ['cpm', 'ctr', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
+  'LinkedIn_Video|Awareness': ['cpv', 'view_rate', 'ctr', 'frequency'],
+  'LinkedIn_Video|Traffic': ['cpv', 'view_rate', 'ctr', 'frequency', 'click_to_session'],
+  'LinkedIn_Video|Conversion': ['cpv', 'view_rate', 'ctr', 'frequency', 'click_to_session', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
   'LinkedIn_SM|Awareness': ['cpm', 'open_rate', 'ctr'],
   'LinkedIn_SM|Traffic': ['cpm', 'open_rate', 'ctr'],
   'LinkedIn_SM|Conversion': ['cpm', 'open_rate', 'ctr', 'conv_rate', 'lead_to_mql', 'mql_to_sql'],
@@ -361,6 +375,7 @@ export const BENCH_FIELD_DESC: Record<string, string> = {
   cpc: 'Cost per click in EUR (e.g. 2.5)',
   ctr: 'Click-through rate as decimal proportion — NOT percentage (e.g. 0.003 for 0.3%)',
   view_rate: 'Video view/completion rate as decimal proportion (e.g. 0.30 for 30%)',
+  cpv: 'Cost per view in EUR (e.g. 0.06)',
   frequency: 'Average ad exposures per unique user over the campaign flight (e.g. 3.0)',
   click_to_session: 'Post-click session rate as decimal proportion (e.g. 0.80 for 80%)',
   conv_rate: 'Session-to-lead conversion rate as decimal proportion (e.g. 0.02 for 2%)',
@@ -394,5 +409,15 @@ export function channelKeyFor(channel: Channel, liFormat?: string): ChannelKey {
   if (liFormat === 'Conversation Ad') return 'LinkedIn_CA';
   if (liFormat === 'Document Ad') return 'LinkedIn_DA';
   if (liFormat === 'Lead Gen Form') return 'LinkedIn_LGF';
+  if (liFormat === 'Video') return 'LinkedIn_Video';
   return channel;
 }
+
+// LinkedIn Video's CPV/VTR hint text is specific to this format (and
+// wrong for YouTube's own view_rate, which is CPM-driven) — kept separate
+// from BENCH_HELP so it never overrides the generic text for other
+// channels/formats.
+export const LI_VIDEO_HELP: Record<string, string> = {
+  cpv: 'LinkedIn counts a view after 2 continuous seconds of playback with at least 50% of the video in view.',
+  view_rate: 'Views / impressions.',
+};

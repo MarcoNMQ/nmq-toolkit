@@ -85,7 +85,7 @@ interface MediaPlanState {
   setChannelSplitPct: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
   setChannelSplitPctAndRebalance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
   setChannelActiveRange: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, activeFrom?: string, activeTo?: string) => void;
-  setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number) => void;
+  setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number | undefined) => void;
   setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
   setChannelAmazonFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: AmazonFormat) => void;
   applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;

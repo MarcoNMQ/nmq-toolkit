@@ -192,8 +192,47 @@ export function calcRow(budget: number, bm: Benchmark, goal: Goal, channel: Chan
         mql_to_sql: m2s, sql, cost_per_sql: sql > 0 ? budget / sql : 0,
       });
     }
+  } else if (channel === 'LinkedIn' && liFormat === 'Video') {
+    // LinkedIn Video is bought and reported on views, not impressions —
+    // the reverse causal order from YouTube's CPM-driven views. CPV and
+    // view rate (VTR) are required inputs with NO invented default: if
+    // either is missing or zero, return Budget-only (every other field
+    // stays undefined, which the UI renders as a dash, never NaN/Infinity).
+    const cpv = bm.cpv;
+    const vtr = bm.view_rate;
+    if (!cpv || cpv <= 0 || !vtr || vtr <= 0) return r;
+    const ctr = bm.ctr ?? 0.003;
+    const freq = bm.frequency ?? 3.0;
+    const c2s = bm.click_to_session ?? 0.80;
+    const views = budget / cpv;
+    const impressions = views / vtr;
+    const reach = freq > 0 ? impressions / freq : 0;
+    const clicks = impressions * ctr;
+    Object.assign(r, {
+      views, cpv, impressions, view_rate: vtr, reach, clicks, ctr,
+      cpc: clicks > 0 ? budget / clicks : 0,
+    });
+    if (goal === 'Traffic' || goal === 'Conversion') {
+      r.sessions = clicks * c2s;
+      r.click_to_session = c2s;
+    }
+    if (goal === 'Conversion') {
+      const convs = (r.sessions ?? 0) * convRate;
+      r.conversions = convs;
+      r.cpa = convs > 0 ? budget / convs : 0;
+      r.cvr = clicks > 0 ? convs / clicks : 0;
+      r.conv_rate = convRate;
+      const l2m = bm.lead_to_mql ?? 0.20;
+      const m2s = bm.mql_to_sql ?? 0.30;
+      const mql = convs * l2m;
+      const sql = mql * m2s;
+      Object.assign(r, {
+        lead_to_mql: l2m, mql, cost_per_mql: mql > 0 ? budget / mql : 0,
+        mql_to_sql: m2s, sql, cost_per_sql: sql > 0 ? budget / sql : 0,
+      });
+    }
   } else {
-    // YouTube, Display, and plain LinkedIn (Static/Video/Carousel — same
+    // YouTube, Display, and plain LinkedIn (Static/Carousel — same
     // impression-based funnel as YouTube/Display, just no Views/CPV step).
     const cpm = bm.cpm ?? 10.0;
     const ctr = bm.ctr ?? 0.003;
@@ -296,4 +335,40 @@ export function aggregateScenarioMetrics(scenario: Scenario): Record<string, num
   });
 
   return totals;
+}
+
+/** Blended LinkedIn Video metrics across a scenario's markets — Budget,
+ *  Views, Impressions, Clicks, Reach are summed directly; CPV/VTR/CPM are
+ *  re-derived from those sums (blended), never averaged as percentages,
+ *  since a straight average of per-market VTR would misweight small vs
+ *  large markets. Scoped to LinkedIn+Video line items only, so a mixed
+ *  scenario's Static/Search/YouTube budget never leaks into the blend. */
+export function aggregateLinkedInVideoMetrics(scenario: Scenario): {
+  budget: number; views: number; impressions: number; clicks: number; reach: number;
+  cpv: number; viewRate: number; cpm: number;
+} {
+  let budget = 0, views = 0, impressions = 0, clicks = 0, reach = 0;
+
+  scenario.markets.forEach((market) => {
+    market.goals.forEach((goal) => {
+      goal.channels.forEach((ch) => {
+        if (ch.channel !== 'LinkedIn' || ch.liFormat !== 'Video') return;
+        const chBudget = channelBudget(scenario, market, goal, ch.splitPct);
+        const convRate = ch.benchmark.conv_rate ?? 0.02;
+        const row = calcRow(chBudget, ch.benchmark, goal.goal, ch.channel, convRate, ch.liFormat, ch.amazonFormat);
+        budget += chBudget;
+        views += row.views ?? 0;
+        impressions += row.impressions ?? 0;
+        clicks += row.clicks ?? 0;
+        reach += row.reach ?? 0;
+      });
+    });
+  });
+
+  return {
+    budget, views, impressions, clicks, reach,
+    cpv: views > 0 ? budget / views : 0,
+    viewRate: impressions > 0 ? views / impressions : 0,
+    cpm: impressions > 0 ? (budget / impressions) * 1000 : 0,
+  };
 }
