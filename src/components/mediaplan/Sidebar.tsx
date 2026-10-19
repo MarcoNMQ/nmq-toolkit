@@ -112,30 +112,6 @@ export function Sidebar() {
     }
   }
 
-  async function downloadGads(scenario: typeof scenarios[number]) {
-    setExporting(`gads-${scenario.id}`);
-    try {
-      const res = await fetch('/api/media-plan/export-gads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario, plan }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `google_ads_${scenario.name.replace(/[^a-z0-9]+/gi, '_')}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast(`Google Ads CSV exported — ${scenario.name}`);
-    } catch (e) {
-      showToast(`Google Ads export failed: ${e instanceof Error ? e.message : 'try again'}`, 'error');
-    } finally {
-      setExporting(null);
-    }
-  }
-
   return (
     <>
       {toast && (
@@ -282,16 +258,6 @@ export function Sidebar() {
         >
           {exporting === 'excel' ? 'Exporting…' : 'Export Excel (all scenarios)'}
         </button>
-        {scenarios.map((s) => (
-          <button
-            key={s.id}
-            disabled={exporting !== null}
-            onClick={() => downloadGads(s)}
-            className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
-          >
-            {exporting === `gads-${s.id}` ? 'Exporting…' : `Export Google Ads CSV — ${s.name}`}
-          </button>
-        ))}
         <button
           onClick={() => {
             if (window.confirm('Clear all scenarios and plan config? This cannot be undone.')) { clearAll(); setCurrentSavedPlanId(null); }

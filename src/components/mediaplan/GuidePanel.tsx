@@ -27,7 +27,7 @@ const GUIDES: Record<string, GuideStep> = {
       'Each scenario has its own total budget, markets, goals, and channels.',
       'Click the 📋 icon next to a scenario in the sidebar to duplicate it, then tweak the copy.',
       'The Compare tab lets you see all scenarios side by side.',
-      'Export individual scenarios as Google Ads CSV, or export all at once as Excel.',
+      'Export all scenarios at once as a structured Excel workbook.',
     ],
   },
   budgets: {
@@ -55,8 +55,7 @@ const GUIDES: Record<string, GuideStep> = {
   export: {
     heading: 'Exporting your plan',
     steps: [
-      '"Export Excel" downloads all scenarios into a structured .xlsx with a Summary and Period Table per scenario.',
-      '"Export Google Ads CSV" downloads a single scenario formatted for Google Ads Editor import.',
+      '"Export Excel" downloads all scenarios into a structured .xlsx with an Overview tab and one tab per channel.',
       '"Save plan" saves a .json file you can reload later via "Load plan".',
       'The JSON file preserves everything — scenarios, benchmarks, plan config.',
     ],

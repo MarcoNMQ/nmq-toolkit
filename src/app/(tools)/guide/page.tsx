@@ -107,8 +107,7 @@ const SECTIONS: Section[] = [
       {
         heading: 'Exporting',
         steps: [
-          { text: 'Click "Export Excel (all scenarios)" in the sidebar footer to download a formatted Excel with all scenarios on separate tabs.' },
-          { text: 'Click "Export Google Ads CSV — [Scenario name]" to export that scenario\'s channel budgets in a format compatible with Google Ads Editor.' },
+          { text: 'Click "Export Excel (all scenarios)" in the sidebar footer to download a formatted Excel with an Overview tab plus one tab per channel actually used.' },
           { text: 'Use "💾 Save plan" to download the full plan as a JSON file — reload it later with "📂 Load plan" to continue editing.' },
           { text: '"Clear all data" at the very bottom of the sidebar removes all scenarios and plan config. It confirms before deleting.' },
         ],
