@@ -24,11 +24,27 @@ export function MarketPicker({ scenario }: { scenario: Scenario }) {
     else addMarket(scenario.id, market);
   }
 
-  function applyGroup(group: string) {
+  // A group button reflects selection state (green when every one of its
+  // countries is selected) and toggles as a whole: click again to remove
+  // every country it added, instead of only ever adding more.
+  function isGroupActive(group: string): boolean {
     const codes = MARKET_GROUPS[group] ?? [];
-    codes.forEach((c) => {
-      if (!selected.has(c)) addMarket(scenario.id, c);
-    });
+    return codes.length > 0 && codes.every((c) => selected.has(c));
+  }
+
+  function toggleGroup(group: string) {
+    const codes = MARKET_GROUPS[group] ?? [];
+    if (isGroupActive(group)) {
+      codes.forEach((c) => removeMarket(scenario.id, c));
+    } else {
+      codes.forEach((c) => {
+        if (!selected.has(c)) addMarket(scenario.id, c);
+      });
+    }
+  }
+
+  function clearAll() {
+    scenario.markets.forEach((m) => removeMarket(scenario.id, m.market));
   }
 
   function addCustom() {
@@ -40,17 +56,30 @@ export function MarketPicker({ scenario }: { scenario: Scenario }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {Object.keys(MARKET_GROUPS).map((g) => (
-          <button
-            key={g}
-            type="button"
-            onClick={() => applyGroup(g)}
-            className="rounded-full border border-ink-200 px-2.5 py-1 text-xs font-bold text-ink-600 hover:bg-ink-50"
-          >
-            + {g}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {Object.keys(MARKET_GROUPS).map((g) => {
+          const active = isGroupActive(g);
+          return (
+            <button
+              key={g}
+              type="button"
+              onClick={() => toggleGroup(g)}
+              title={active ? `Remove all ${g} markets` : `Add all ${g} markets`}
+              className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${active ? 'bg-mint-500 text-white' : 'border border-ink-200 text-ink-600 hover:bg-ink-50'}`}
+            >
+              {active ? g : `+ ${g}`}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={clearAll}
+          disabled={scenario.markets.length === 0}
+          title="Remove every selected market"
+          className="ml-auto rounded-full border border-red-200 px-2.5 py-1 text-xs font-bold text-red-500 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          Delete all
+        </button>
       </div>
       <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-ink-100 p-2">
         {Object.entries(MARKET_LABELS).map(([code, label]) => {
