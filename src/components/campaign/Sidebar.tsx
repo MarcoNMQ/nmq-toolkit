@@ -199,7 +199,11 @@ export function Sidebar() {
 
   function handleExport() {
     const subset = filteredCampaigns();
-    downloadExport('campaigns', platform === 'google' ? 'google_ads_campaigns.csv' : 'facebook_campaigns.xlsx', subset);
+    const isSearchOnly = platform === 'google' && subset.length > 0 && subset.every((c) => 'channel' in c && c.channel === 'Search');
+    const filename = platform === 'google'
+      ? (isSearchOnly ? 'google_ads_search_bulk_upload.xlsx' : 'google_ads_campaigns.csv')
+      : 'facebook_campaigns.xlsx';
+    downloadExport('campaigns', filename, subset);
     setExportPanelOpen(false);
   }
 
@@ -374,14 +378,18 @@ export function Sidebar() {
                                 const adOwnErrors = adErrors.get(ad.id) ?? [];
                                 return (
                                   <div key={ad.id}>
-                                    <button
-                                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
-                                      onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                                    <div
+                                      className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition ${selected.type === 'ad' && selected.adId === ad.id ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-400 hover:bg-ink-50'}`}
                                     >
-                                      <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
-                                      <span className="min-w-0 flex-1 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
-                                        {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
-                                      </span>
+                                      <button
+                                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                        onClick={() => setSelected({ type: 'ad', campaignId: c.id, adId: ad.id })}
+                                      >
+                                        <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-ink-100 text-ink-500">Ad</span>
+                                        <span className="min-w-0 flex-1 truncate" title={('ad_name' in ad && ad.ad_name) || ''}>
+                                          {('ad_name' in ad && ad.ad_name) || '(unnamed ad)'}
+                                        </span>
+                                      </button>
                                       {adHasError && (
                                         <button
                                           className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white transition hover:bg-red-600"
@@ -391,7 +399,7 @@ export function Sidebar() {
                                           !
                                         </button>
                                       )}
-                                    </button>
+                                    </div>
                                     {openErrorId === ad.id && adOwnErrors.length > 0 && (
                                       <div className="mx-1 mb-1 rounded-md border border-red-200 bg-red-50 px-3 py-2">
                                         {adOwnErrors.map((e, i) => (

@@ -98,7 +98,7 @@ function display(field: FbCampaignLevelField, v: unknown): string {
 }
 
 export interface FbFieldConflict {
-  field: FbCampaignLevelField;
+  field: FbCampaignLevelField | FbAdsetLevelField;
   label: string;
   /** Distinct values, in the order they first appear across the ad sets. */
   values: string[];
@@ -119,17 +119,127 @@ export function findFbCampaignConflicts(group: FbCampaignGroup): FbFieldConflict
   return conflicts;
 }
 
-/** Ad set names used more than once inside the same campaign. */
-export function findFbDuplicateAdsets(group: FbCampaignGroup): string[] {
-  const counts = new Map<string, { name: string; n: number }>();
-  for (const c of group.cards) {
-    const k = fbNameKey(c.adset_name);
-    if (!k) continue; // missing ad set names are flagged by validateFbCampaigns
-    const entry = counts.get(k) ?? { name: c.adset_name.trim(), n: 0 };
-    entry.n += 1;
-    counts.set(k, entry);
+/** Fields that live on the ad set itself — shared by every ad inside it.
+ *  Multiple cards sharing a campaign name AND an ad set name are the SAME
+ *  Meta ad set with several ads (that's the normal, intended way to put
+ *  more than one creative under one ad set in this tool) — that's only
+ *  safe to export as one ad set when these fields actually agree across
+ *  those cards. Meta's bulk import groups ad rows by matching Ad Set Name,
+ *  so if they disagreed, whichever card's values "win" would be silently
+ *  decided by Meta's importer, not by the person exporting. */
+export const FB_ADSET_LEVEL_FIELDS = [
+  'adset_status',
+  'adset_start_time',
+  'adset_stop_time',
+  'adset_budget_type',
+  'adset_budget',
+  'countries',
+  'gender',
+  'age_min',
+  'age_max',
+  'custom_audiences',
+  'excluded_custom_audiences',
+  'publisher_platforms',
+  'device_platforms',
+  'facebook_positions',
+  'instagram_positions',
+  'optimization_goal',
+  'billing_event',
+  'bid_amount',
+  'adset_bid_strategy',
+  'adset_min_spend',
+  'adset_max_spend',
+] as const;
+
+export type FbAdsetLevelField = (typeof FB_ADSET_LEVEL_FIELDS)[number];
+
+const ADSET_FIELD_LABELS: Record<FbAdsetLevelField, string> = {
+  adset_status: 'Ad set status',
+  adset_start_time: 'Ad set start time',
+  adset_stop_time: 'Ad set stop time',
+  adset_budget_type: 'Ad set budget type',
+  adset_budget: 'Ad set budget',
+  countries: 'Countries',
+  gender: 'Gender',
+  age_min: 'Min age',
+  age_max: 'Max age',
+  custom_audiences: 'Custom audiences',
+  excluded_custom_audiences: 'Excluded custom audiences',
+  publisher_platforms: 'Publisher platforms',
+  device_platforms: 'Device platforms',
+  facebook_positions: 'Facebook positions',
+  instagram_positions: 'Instagram positions',
+  optimization_goal: 'Optimization goal',
+  billing_event: 'Billing event',
+  bid_amount: 'Bid amount',
+  adset_bid_strategy: 'Ad set bid strategy',
+  adset_min_spend: 'Ad set minimum spend',
+  adset_max_spend: 'Ad set maximum spend',
+};
+
+const ADSET_ARRAY_FIELDS = new Set<FbAdsetLevelField>(['countries', 'publisher_platforms', 'device_platforms', 'facebook_positions', 'instagram_positions']);
+const ADSET_MONEY_FIELDS = new Set<FbAdsetLevelField>(['adset_budget', 'bid_amount', 'adset_min_spend', 'adset_max_spend']);
+
+function normalizeAdsetField(field: FbAdsetLevelField, v: unknown): string {
+  if (ADSET_ARRAY_FIELDS.has(field)) return [...((v as string[]) ?? [])].map((s) => s.trim().toLowerCase()).sort().join(',');
+  if (ADSET_MONEY_FIELDS.has(field)) return v === undefined || v === null || v === '' ? '' : Number(v).toFixed(2);
+  if (field === 'age_min' || field === 'age_max') return v === undefined || v === null || v === '' ? '' : String(v);
+  return String(v ?? '').trim();
+}
+
+function displayAdsetField(field: FbAdsetLevelField, v: unknown): string {
+  if (ADSET_ARRAY_FIELDS.has(field)) {
+    const arr = (v as string[] | undefined) ?? [];
+    return arr.length ? arr.join(', ') : '(none)';
   }
-  return [...counts.values()].filter((e) => e.n > 1).map((e) => e.name);
+  if (ADSET_MONEY_FIELDS.has(field)) {
+    return v === undefined || v === null || v === '' ? '(blank)' : `€${Number(v).toFixed(2)}`;
+  }
+  const s = String(v ?? '').trim();
+  return s || '(blank)';
+}
+
+export interface FbAdsetGroup {
+  key: string;
+  name: string;
+  cards: FbCampaign[];
+}
+
+/** Groups a campaign's cards by ad set name — cards sharing both a campaign
+ *  name and an ad set name are ads of the same ad set. Cards with no ad set
+ *  name are left out (that's flagged separately by validateFbCampaigns). */
+function groupByAdsetName(cards: FbCampaign[]): FbAdsetGroup[] {
+  const groups = new Map<string, FbAdsetGroup>();
+  for (const c of cards) {
+    const key = fbNameKey(c.adset_name);
+    if (!key) continue;
+    const existing = groups.get(key);
+    if (existing) existing.cards.push(c);
+    else groups.set(key, { key, name: c.adset_name.trim(), cards: [c] });
+  }
+  return [...groups.values()];
+}
+
+/** Ad-set-level fields whose values differ across the cards sharing one ad
+ *  set name. A single card (the normal case) never conflicts with itself. */
+export function findFbAdsetConflicts(group: FbAdsetGroup): FbFieldConflict[] {
+  if (group.cards.length < 2) return [];
+  const conflicts: FbFieldConflict[] = [];
+  for (const field of FB_ADSET_LEVEL_FIELDS) {
+    const seen = new Map<string, string>();
+    for (const c of group.cards) {
+      const n = normalizeAdsetField(field, c[field]);
+      if (!seen.has(n)) seen.set(n, displayAdsetField(field, c[field]));
+    }
+    if (seen.size > 1) conflicts.push({ field, label: ADSET_FIELD_LABELS[field], values: [...seen.values()] });
+  }
+  return conflicts;
+}
+
+/** Ad-set groups (sharing a name) within a campaign, together with any
+ *  conflicts found among their cards. */
+function adsetGroupsWithConflicts(group: FbCampaignGroup): { adsetGroup: FbAdsetGroup; conflicts: FbFieldConflict[] }[] {
+  return groupByAdsetName(group.cards).map((adsetGroup) => ({ adsetGroup, conflicts: findFbAdsetConflicts(adsetGroup) }));
 }
 
 /**
@@ -149,11 +259,11 @@ export function fbGroupingIssuesByCard(campaigns: FbCampaign[]): Map<string, str
       const msg = `${conflict.label} differs across ad sets of this campaign: ${conflict.values.join(' vs ')}`;
       group.cards.forEach((c) => add(c.id, msg));
     }
-    for (const adset of findFbDuplicateAdsets(group)) {
-      const msg = `Ad set name "${adset}" is used more than once in this campaign — Meta would merge them into one ad set`;
-      group.cards
-        .filter((c) => fbNameKey(c.adset_name) === fbNameKey(adset))
-        .forEach((c) => add(c.id, msg));
+    for (const { adsetGroup, conflicts } of adsetGroupsWithConflicts(group)) {
+      conflicts.forEach((conflict) => {
+        const msg = `Ad set "${adsetGroup.name}": ${conflict.label} differs across its ${adsetGroup.cards.length} ads — Meta needs one consistent ad set (${conflict.values.join(' vs ')})`;
+        adsetGroup.cards.forEach((c) => add(c.id, msg));
+      });
     }
   }
   return byCard;
@@ -167,8 +277,10 @@ export function fbGroupingErrors(campaigns: FbCampaign[]): string[] {
     for (const conflict of findFbCampaignConflicts(group)) {
       errors.push(`${label}: ${conflict.label} differs across its ${group.cards.length} ad sets (${conflict.values.join(' vs ')}).`);
     }
-    for (const adset of findFbDuplicateAdsets(group)) {
-      errors.push(`${label}: ad set name "${adset}" is used more than once — Meta would merge them into one ad set.`);
+    for (const { adsetGroup, conflicts } of adsetGroupsWithConflicts(group)) {
+      conflicts.forEach((conflict) => {
+        errors.push(`${label}: ad set "${adsetGroup.name}" — ${conflict.label} differs across its ${adsetGroup.cards.length} ads (${conflict.values.join(' vs ')}); Meta needs one consistent ad set.`);
+      });
     }
   }
   return errors;

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { NETWORKS, LANGUAGES } from './constants';
 import { fbNameKey, fbSiblings, pickFbCampaignLevel } from './fbGrouping';
-import type { FbCampaign, FbAd, GoogleAd, GoogleCampaign, GoogleKeyword, GoogleSitelink, Platform, SelectedView } from './types';
+import type { FbCampaign, FbAd, GoogleAd, GoogleCampaign, GoogleKeyword, GoogleNegativeKeyword, GoogleSitelink, Platform, SelectedView } from './types';
 
 const STORAGE_KEY = 'nmq-campaign-builder-store';
 
@@ -60,6 +60,10 @@ export function newGoogleCampaign(): GoogleCampaign {
     ads: [],
     keywords: [],
     sitelinks: [],
+    negative_keywords: [],
+    eu_political_ads: '',
+    search_partners: false,
+    display_expansion: false,
     audience_type: '',
     audience_segments: '',
     audience_keywords: '',
@@ -73,6 +77,10 @@ export function newGoogleKeyword(): GoogleKeyword {
 
 export function newGoogleSitelink(): GoogleSitelink {
   return { id: uid(), linkText: '', description1: '', description2: '', finalUrl: '' };
+}
+
+export function newGoogleNegativeKeyword(): GoogleNegativeKeyword {
+  return { id: uid(), text: '', matchType: 'Broad', level: 'adgroup' };
 }
 
 export function newFbAd(): FbAd {
@@ -165,10 +173,15 @@ interface BuilderState {
   addGoogleKeyword: (campaignId: string) => string;
   updateGoogleKeyword: (campaignId: string, keywordId: string, patch: Partial<GoogleKeyword>) => void;
   removeGoogleKeyword: (campaignId: string, keywordId: string) => void;
+  addGoogleKeywordsBulk: (campaignId: string, keywords: Pick<GoogleKeyword, 'text' | 'matchType'>[]) => void;
 
   addGoogleSitelink: (campaignId: string) => string;
   updateGoogleSitelink: (campaignId: string, sitelinkId: string, patch: Partial<GoogleSitelink>) => void;
   removeGoogleSitelink: (campaignId: string, sitelinkId: string) => void;
+
+  addGoogleNegativeKeyword: (campaignId: string) => string;
+  updateGoogleNegativeKeyword: (campaignId: string, negativeKeywordId: string, patch: Partial<GoogleNegativeKeyword>) => void;
+  removeGoogleNegativeKeyword: (campaignId: string, negativeKeywordId: string) => void;
 
   addFbCampaign: () => string;
   updateFbCampaign: (id: string, patch: Partial<FbCampaign>) => void;
@@ -316,6 +329,12 @@ export const useBuilderStore = create<BuilderState>()(
         c.id === campaignId ? { ...c, keywords: c.keywords.filter((k) => k.id !== keywordId) } : c,
       ),
     })),
+  addGoogleKeywordsBulk: (campaignId, keywords) =>
+    set((state) => ({
+      googleCampaigns: state.googleCampaigns.map((c) => (c.id === campaignId
+        ? { ...c, keywords: [...c.keywords, ...keywords.map((k) => ({ ...k, id: uid() }))] }
+        : c)),
+    })),
 
   addGoogleSitelink: (campaignId) => {
     const sl = newGoogleSitelink();
@@ -338,6 +357,30 @@ export const useBuilderStore = create<BuilderState>()(
     set((state) => ({
       googleCampaigns: state.googleCampaigns.map((c) =>
         c.id === campaignId ? { ...c, sitelinks: c.sitelinks.filter((s) => s.id !== sitelinkId) } : c,
+      ),
+    })),
+
+  addGoogleNegativeKeyword: (campaignId) => {
+    const nk = newGoogleNegativeKeyword();
+    set((state) => ({
+      googleCampaigns: state.googleCampaigns.map((c) =>
+        c.id === campaignId ? { ...c, negative_keywords: [...c.negative_keywords, nk] } : c,
+      ),
+    }));
+    return nk.id;
+  },
+  updateGoogleNegativeKeyword: (campaignId, negativeKeywordId, patch) =>
+    set((state) => ({
+      googleCampaigns: state.googleCampaigns.map((c) =>
+        c.id === campaignId
+          ? { ...c, negative_keywords: c.negative_keywords.map((n) => (n.id === negativeKeywordId ? { ...n, ...patch } : n)) }
+          : c,
+      ),
+    })),
+  removeGoogleNegativeKeyword: (campaignId, negativeKeywordId) =>
+    set((state) => ({
+      googleCampaigns: state.googleCampaigns.map((c) =>
+        c.id === campaignId ? { ...c, negative_keywords: c.negative_keywords.filter((n) => n.id !== negativeKeywordId) } : c,
       ),
     })),
 

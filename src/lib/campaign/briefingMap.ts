@@ -9,7 +9,26 @@ import {
 } from './briefing';
 import type { FbCampaign, GoogleCampaign } from './types';
 
-export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCampaign> {
+// Only YouTube briefing rows can be mapped today — the briefing sheet format
+// has no Search-shaped columns (no keyword/RSA/ad-group layout), so a Search
+// row cannot be honestly mapped yet. A blank channel code is treated as
+// YouTube for backward compatibility with legacy sheets that have no channel
+// column at all. Any other code (including SRC) is reported as a row-level
+// error instead of being silently forced into YouTube's shape.
+const CHANNEL_CODE_TO_GOOGLE_CHANNEL: Record<string, string> = { YT: 'YouTube' };
+
+export type GoogleBriefingMapResult =
+  | { campaign: Partial<GoogleCampaign> }
+  | { error: string };
+
+export function mapBriefingRowToGoogleCampaign(r: BriefingRow): GoogleBriefingMapResult {
+  const chCode = (r.channel_code || '').toUpperCase();
+  const channel = chCode ? CHANNEL_CODE_TO_GOOGLE_CHANNEL[chCode] : 'YouTube';
+  if (!channel) {
+    return {
+      error: `Unsupported channel code "${r.channel_code}" for a Google row — only YouTube (YT) briefing import is supported today. Search briefing import isn't built yet.`,
+    };
+  }
   const month = MONTH_CODE_TO_MONTH[r.month] ?? (MONTHS.includes(r.month) ? r.month : '');
   const mainGoal = GOAL_CODE_TO_GOOGLE_MAIN[r.goal_code] ?? '';
   const perfGoal = PERF_CODE_TO_GOOGLE_PERF[r.perf_code] ?? '';
@@ -26,8 +45,8 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
 
   const languages = Array.from(new Set(countries.flatMap((c) => COUNTRY_LANGUAGE_MAP[c] ?? []))).join(',');
 
-  return {
-    channel: 'YouTube',
+  return { campaign: {
+    channel,
     main_goal: mainGoal,
     perf_goal: perfGoal,
     client_profile: 'Shimano',
@@ -50,7 +69,7 @@ export function mapBriefingRowToGoogleCampaign(r: BriefingRow): Partial<GoogleCa
     campaign_name: campaignName,
     adset_name: adsetName,
     name_locked: true,
-  };
+  } };
 }
 
 export function mapBriefingRowToFbCampaign(r: BriefingRow): Partial<FbCampaign> {
