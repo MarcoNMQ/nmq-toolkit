@@ -58,6 +58,16 @@ export interface GoogleSitelink {
   finalUrl: string;
 }
 
+// Search-only negative keyword. 'adgroup' scopes it to this campaign's one
+// ad group; 'campaign' scopes it to the whole campaign. See
+// google/searchBridge.ts for how this becomes a Bulk Upload row.
+export interface GoogleNegativeKeyword {
+  id: string;
+  text: string;
+  matchType: 'Broad' | 'Phrase' | 'Exact';
+  level: 'adgroup' | 'campaign';
+}
+
 export interface GoogleCampaign {
   id: string;
   campaign_name: string;
@@ -96,6 +106,15 @@ export interface GoogleCampaign {
   // any other channel, simply unused.
   keywords: GoogleKeyword[];
   sitelinks: GoogleSitelink[];
+  negative_keywords: GoogleNegativeKeyword[];
+  // Search-only Bulk Upload fields (searchBridge.ts / searchSerializer.ts).
+  // Left blank/false for every other channel.
+  eu_political_ads?: 'Yes' | 'No' | '';
+  search_partners?: boolean;
+  display_expansion?: boolean;
+  target_cpa?: number;
+  target_roas?: number;
+  target_impression_share?: number;
   // Audience & placement — optional setup notes, not exported to CSV.
   audience_type?: 'In-market' | 'Affinity' | 'Life events' | 'Detailed demographics' | 'Custom segment' | 'Your data segment' | 'Optimized targeting' | '';
   audience_segments?: string;

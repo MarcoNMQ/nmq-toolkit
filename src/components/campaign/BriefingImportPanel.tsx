@@ -45,6 +45,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
   const [error, setError] = useState<string | null>(null);
   const [debug, setDebug] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   // QC state — computed once after rows are fetched, cleared on each new fetch
   const [qcResults, setQcResults] = useState<RowQcResult[]>([]);
@@ -199,13 +200,20 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
 
   async function handleImport() {
     setImporting(true);
+    setImportErrors([]);
+    const rowErrors: string[] = [];
     let lastId = '';
     try {
       for (const idx of selectedIdxs) {
         const r = rows[idx];
         if (platform === 'google') {
+          const mapped = mapBriefingRowToGoogleCampaign(r);
+          if ('error' in mapped) {
+            rowErrors.push(`Row ${idx + 1} (${r.campaign_name || r.adset_name || '—'}): ${mapped.error}`);
+            continue;
+          }
           const id = addGoogleCampaign();
-          updateGoogleCampaign(id, mapBriefingRowToGoogleCampaign(r));
+          updateGoogleCampaign(id, mapped.campaign);
           lastId = id;
 
           if (r.asset_link) {
@@ -298,6 +306,7 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
       setImporting(false);
       setSelectedIdxs(new Set());
       setQcExpanded(new Set());
+      if (rowErrors.length) setImportErrors(rowErrors);
     }
     if (lastId) onDone(lastId);
   }
@@ -365,6 +374,14 @@ export function BriefingImportPanel({ platform, onDone }: { platform: Platform; 
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       {debug && <p className="mt-1 text-xs text-ink-400">{debug}</p>}
+      {importErrors.length > 0 && (
+        <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-2">
+          <p className="text-xs font-semibold text-red-600">{importErrors.length} row(s) could not be imported:</p>
+          <ul className="mt-1 space-y-0.5">
+            {importErrors.map((e, i) => <li key={i} className="text-xs text-red-500">{e}</li>)}
+          </ul>
+        </div>
+      )}
 
       {headers.length > 0 && (
         <div className="mt-3">

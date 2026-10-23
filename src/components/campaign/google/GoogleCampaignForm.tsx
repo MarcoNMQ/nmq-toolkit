@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { generateAdsetName, generateCampaignName } from '@/lib/campaign/builder';
 import {
@@ -12,7 +12,12 @@ import {
 import { useClientsStore } from '@/lib/clients/store';
 import { Field, MultiToggle, Select, TextInput } from '@/components/Field';
 import { BriefingImportPanel } from '@/components/campaign/BriefingImportPanel';
+import { BulkKeywordsPanel } from '@/components/campaign/google/BulkKeywordsPanel';
 import { getConventionForClient } from '@/lib/campaign/naming/templates';
+import { SEARCH_BID_STRATEGIES } from '@/lib/campaign/google/searchTypes';
+import {
+  bidStrategyNeedsTargetCpa, bidStrategyNeedsTargetImpressionShare, bidStrategyNeedsTargetRoas,
+} from '@/lib/campaign/google/searchDefaults';
 import type { GoogleCampaign } from '@/lib/campaign/types';
 
 export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
@@ -20,12 +25,16 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
   const update = useBuilderStore((s) => s.updateGoogleCampaign);
   const removeCampaign = useBuilderStore((s) => s.removeGoogleCampaign);
   const setSelected = useBuilderStore((s) => s.setSelected);
+  const [showBulkKeywords, setShowBulkKeywords] = useState(false);
   const addGoogleKeyword = useBuilderStore((s) => s.addGoogleKeyword);
   const updateGoogleKeyword = useBuilderStore((s) => s.updateGoogleKeyword);
   const removeGoogleKeyword = useBuilderStore((s) => s.removeGoogleKeyword);
   const addGoogleSitelink = useBuilderStore((s) => s.addGoogleSitelink);
   const updateGoogleSitelink = useBuilderStore((s) => s.updateGoogleSitelink);
   const removeGoogleSitelink = useBuilderStore((s) => s.removeGoogleSitelink);
+  const addGoogleNegativeKeyword = useBuilderStore((s) => s.addGoogleNegativeKeyword);
+  const updateGoogleNegativeKeyword = useBuilderStore((s) => s.updateGoogleNegativeKeyword);
+  const removeGoogleNegativeKeyword = useBuilderStore((s) => s.removeGoogleNegativeKeyword);
   const clients = useClientsStore((s) => s.clients);
   const addClient = useClientsStore((s) => s.addClient);
   const removeClient = useClientsStore((s) => s.removeClient);
@@ -306,45 +315,71 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
 
       <h3 className="text-sm font-semibold text-ink-600">Editor settings</h3>
 
-      <Field label="Networks" tooltip="Which Google Ads networks the campaign can serve on. These are the only values Editor's bulk import accepts for Demand Gen campaigns.">
-        <MultiToggle
-          options={NETWORK_OPTIONS}
-          values={campaign.networks ? campaign.networks.split(';').filter(Boolean) : []}
-          onChange={(v) => patch({ networks: v.join(';') })}
-        />
-      </Field>
+      {isSearch ? (
+        <Field label="Networks" tooltip="Search campaigns always serve on Google Search. Search Partners and Display Expansion are explicit opt-ins — never on by default.">
+          <div className="flex flex-wrap gap-4 text-sm text-ink-700">
+            <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-500">Google search (always on)</span>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={!!campaign.search_partners} onChange={(e) => patch({ search_partners: e.target.checked })} />
+              Search partners
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={!!campaign.display_expansion} onChange={(e) => patch({ display_expansion: e.target.checked })} />
+              Display Expansion
+            </label>
+          </div>
+        </Field>
+      ) : (
+        <Field label="Networks" tooltip="Which Google Ads networks the campaign can serve on. These are the only values Editor's bulk import accepts for Demand Gen campaigns.">
+          <MultiToggle
+            options={NETWORK_OPTIONS}
+            values={campaign.networks ? campaign.networks.split(';').filter(Boolean) : []}
+            onChange={(v) => patch({ networks: v.join(';') })}
+          />
+        </Field>
+      )}
 
-      <Field
-        label="Languages"
-        hint="Pick 'All' or specific languages — use the shortcut to add languages for the countries selected above"
-        tooltip="Targets people based on their Google account/browser language, not their location. Usually matches the countries you're targeting."
-      >
-        <MultiToggle
-          options={LANGUAGE_OPTIONS}
-          values={campaign.languages ? campaign.languages.split(',').map((s) => s.trim()).filter(Boolean) : []}
-          onChange={(v) => {
-            // "All" is exclusive — picking it clears everything else, and picking
-            // anything else while "All" is active drops "All".
-            if (v.includes('All') && v.length > 1) {
-              patch({ languages: v.filter((l) => l !== 'All').join(',') });
-            } else {
-              patch({ languages: v.join(',') });
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="mt-1 w-fit text-xs font-semibold text-brand-600 hover:underline"
-          onClick={() => {
-            const fromCountries = Array.from(new Set(campaign.countries.flatMap((c) => COUNTRY_LANGUAGE_MAP[c] ?? [])));
-            const current = campaign.languages ? campaign.languages.split(',').map((s) => s.trim()).filter(Boolean) : [];
-            const merged = Array.from(new Set([...current.filter((l) => l !== 'All'), ...fromCountries]));
-            patch({ languages: merged.join(',') });
-          }}
+      {isSearch ? (
+        <Field label="EU political ads" tooltip="Required for every Search campaign. Never guessed — pick the value that matches this campaign.">
+          <Select value={campaign.eu_political_ads ?? ''} onChange={(e) => patch({ eu_political_ads: e.target.value as GoogleCampaign['eu_political_ads'] })}>
+            <option value="">—</option>
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </Select>
+        </Field>
+      ) : (
+        <Field
+          label="Languages"
+          hint="Pick 'All' or specific languages — use the shortcut to add languages for the countries selected above"
+          tooltip="Targets people based on their Google account/browser language, not their location. Usually matches the countries you're targeting."
         >
-          + Add languages for selected countries
-        </button>
-      </Field>
+          <MultiToggle
+            options={LANGUAGE_OPTIONS}
+            values={campaign.languages ? campaign.languages.split(',').map((s) => s.trim()).filter(Boolean) : []}
+            onChange={(v) => {
+              // "All" is exclusive — picking it clears everything else, and picking
+              // anything else while "All" is active drops "All".
+              if (v.includes('All') && v.length > 1) {
+                patch({ languages: v.filter((l) => l !== 'All').join(',') });
+              } else {
+                patch({ languages: v.join(',') });
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="mt-1 w-fit text-xs font-semibold text-brand-600 hover:underline"
+            onClick={() => {
+              const fromCountries = Array.from(new Set(campaign.countries.flatMap((c) => COUNTRY_LANGUAGE_MAP[c] ?? [])));
+              const current = campaign.languages ? campaign.languages.split(',').map((s) => s.trim()).filter(Boolean) : [];
+              const merged = Array.from(new Set([...current.filter((l) => l !== 'All'), ...fromCountries]));
+              patch({ languages: merged.join(',') });
+            }}
+          >
+            + Add languages for selected countries
+          </button>
+        </Field>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Labels" hint="Leave blank to auto-generate from month + year">
@@ -359,39 +394,62 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
         <Field label="End date">
           <TextInput type="date" value={campaign.end_date} onChange={(e) => patch({ end_date: e.target.value })} />
         </Field>
-        <Field label={`Budget (€ ${campaign.budget_type === 'Daily' ? 'per day' : 'total'})`}>
-          <div className="flex gap-2">
-            <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} className="flex-1" />
-            <div className="flex shrink-0 rounded-md bg-ink-100 p-0.5 text-xs font-bold">
-              <button
-                type="button"
-                className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Campaign total' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
-                onClick={() => patch({ budget_type: 'Campaign total' })}
-              >
-                Total
-              </button>
-              <button
-                type="button"
-                className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Daily' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
-                onClick={() => patch({ budget_type: 'Daily' })}
-              >
-                Daily
-              </button>
+        {isSearch ? (
+          <Field label="Budget (€ per day)" tooltip="Search campaigns export as an average daily budget only for now — Campaign Total's exact value isn't verified yet.">
+            <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} />
+          </Field>
+        ) : (
+          <Field label={`Budget (€ ${campaign.budget_type === 'Daily' ? 'per day' : 'total'})`}>
+            <div className="flex gap-2">
+              <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} className="flex-1" />
+              <div className="flex shrink-0 rounded-md bg-ink-100 p-0.5 text-xs font-bold">
+                <button
+                  type="button"
+                  className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Campaign total' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
+                  onClick={() => patch({ budget_type: 'Campaign total' })}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  className={`rounded px-2 py-1 transition ${campaign.budget_type === 'Daily' ? 'bg-white text-ink-900 shadow' : 'text-ink-500'}`}
+                  onClick={() => patch({ budget_type: 'Daily' })}
+                >
+                  Daily
+                </button>
+              </div>
             </div>
-          </div>
-        </Field>
+          </Field>
+        )}
         <Field label="Bid strategy">
           <Select value={campaign.bid_strategy} onChange={(e) => patch({ bid_strategy: e.target.value })}>
             <option value="">—</option>
-            {BID_STRATEGIES.map((b) => <option key={b}>{b}</option>)}
+            {(isSearch ? SEARCH_BID_STRATEGIES : BID_STRATEGIES).map((b) => <option key={b}>{b}</option>)}
           </Select>
         </Field>
-        <Field label="Default CTA">
-          <Select value={campaign.cta} onChange={(e) => patch({ cta: e.target.value })}>
-            <option value="">—</option>
-            {CTAS.map((c) => <option key={c}>{c}</option>)}
-          </Select>
-        </Field>
+        {!isSearch && (
+          <Field label="Default CTA">
+            <Select value={campaign.cta} onChange={(e) => patch({ cta: e.target.value })}>
+              <option value="">—</option>
+              {CTAS.map((c) => <option key={c}>{c}</option>)}
+            </Select>
+          </Field>
+        )}
+        {isSearch && bidStrategyNeedsTargetCpa(campaign.bid_strategy as typeof SEARCH_BID_STRATEGIES[number]) && (
+          <Field label="Target CPA (€)">
+            <TextInput type="number" min={0} step="0.01" value={campaign.target_cpa ?? ''} onChange={(e) => patch({ target_cpa: Number(e.target.value) })} />
+          </Field>
+        )}
+        {isSearch && bidStrategyNeedsTargetRoas(campaign.bid_strategy as typeof SEARCH_BID_STRATEGIES[number]) && (
+          <Field label="Target ROAS (%)">
+            <TextInput type="number" min={0} step="1" value={campaign.target_roas ?? ''} onChange={(e) => patch({ target_roas: Number(e.target.value) })} />
+          </Field>
+        )}
+        {isSearch && bidStrategyNeedsTargetImpressionShare(campaign.bid_strategy as typeof SEARCH_BID_STRATEGIES[number]) && (
+          <Field label="Target impression share (%)">
+            <TextInput type="number" min={0} max={100} step="1" value={campaign.target_impression_share ?? ''} onChange={(e) => patch({ target_impression_share: Number(e.target.value) })} />
+          </Field>
+        )}
       </div>
 
       <details className="rounded-md border border-ink-200">
@@ -453,14 +511,30 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-ink-600">Keywords</h3>
-              <button
-                type="button"
-                onClick={() => addGoogleKeyword(campaignId)}
-                className="text-xs font-semibold text-brand-600 hover:underline"
-              >
-                + Add keyword
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkKeywords(true)}
+                  className="text-xs font-semibold text-brand-600 hover:underline"
+                >
+                  📋 Bulk add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addGoogleKeyword(campaignId)}
+                  className="text-xs font-semibold text-brand-600 hover:underline"
+                >
+                  + Add keyword
+                </button>
+              </div>
             </div>
+            {showBulkKeywords && (
+              <BulkKeywordsPanel
+                campaignId={campaignId}
+                existing={campaign.keywords}
+                onClose={() => setShowBulkKeywords(false)}
+              />
+            )}
             <p className="mb-2 text-xs text-ink-400">Exported as a separate CSV — Editor imports keywords through its own bulk-upload step.</p>
             {campaign.keywords.length === 0 && <p className="text-sm text-ink-400">No keywords yet.</p>}
             <div className="space-y-2">
@@ -484,6 +558,57 @@ export function GoogleCampaignForm({ campaignId }: { campaignId: string }) {
                   <button
                     type="button"
                     onClick={() => removeGoogleKeyword(campaignId, kw.id)}
+                    className="text-sm text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-ink-600">Negative keywords</h3>
+              <button
+                type="button"
+                onClick={() => addGoogleNegativeKeyword(campaignId)}
+                className="text-xs font-semibold text-brand-600 hover:underline"
+              >
+                + Add negative keyword
+              </button>
+            </div>
+            <p className="mb-2 text-xs text-ink-400">Exported in the Bulk Upload workbook&apos;s Negative keywords tab. Campaign-level blocks the whole campaign; Ad group-level blocks only this ad group.</p>
+            {campaign.negative_keywords.length === 0 && <p className="text-sm text-ink-400">No negative keywords yet.</p>}
+            <div className="space-y-2">
+              {campaign.negative_keywords.map((nk) => (
+                <div key={nk.id} className="flex items-center gap-2">
+                  <TextInput
+                    value={nk.text}
+                    onChange={(e) => updateGoogleNegativeKeyword(campaignId, nk.id, { text: e.target.value })}
+                    placeholder="e.g. free"
+                    className="flex-1"
+                  />
+                  <Select
+                    value={nk.matchType}
+                    onChange={(e) => updateGoogleNegativeKeyword(campaignId, nk.id, { matchType: e.target.value as 'Broad' | 'Phrase' | 'Exact' })}
+                    className="w-32"
+                  >
+                    <option value="Broad">Broad</option>
+                    <option value="Phrase">Phrase</option>
+                    <option value="Exact">Exact</option>
+                  </Select>
+                  <Select
+                    value={nk.level}
+                    onChange={(e) => updateGoogleNegativeKeyword(campaignId, nk.id, { level: e.target.value as 'adgroup' | 'campaign' })}
+                    className="w-32"
+                  >
+                    <option value="adgroup">Ad group</option>
+                    <option value="campaign">Campaign</option>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => removeGoogleNegativeKeyword(campaignId, nk.id)}
                     className="text-sm text-red-500 hover:underline"
                   >
                     Remove
