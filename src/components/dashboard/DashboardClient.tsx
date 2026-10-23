@@ -10,6 +10,8 @@ import AiPanel from './AiPanel';
 import DataSourcePicker from './DataSourcePicker';
 import ColumnMapper from './ColumnMapper';
 import ComparePanel from './ComparePanel';
+import PeriodCompareControl from './PeriodCompareControl';
+import PeriodCompareSummary from './PeriodCompareSummary';
 import type { DashboardFilters } from '@/lib/dashboard/types';
 import type { ColumnMapping } from '@/lib/dashboard/columnDetect';
 import type { ParsedMediaPlan, CompareResult } from '@/lib/dashboard/mediaPlanTypes';
@@ -34,7 +36,7 @@ export default function DashboardClient() {
     filters, totals, byFunnelStage, trend, breakdown,
     availableChannels, availableMarkets, availableMetrics, allRows,
     loadDemo, setIngestData, confirmMapping, resetToPickStep, setFilters,
-    setCompareContext,
+    setCompareContext, periodComparison,
   } = useDashboardStore();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'compare' | 'ai'>('overview');
@@ -233,6 +235,8 @@ export default function DashboardClient() {
             </div>
           </div>
 
+          <PeriodCompareControl />
+
           {(filters.markets.length > 0 || filters.channels.length > 0) && (
             <button
               onClick={() => setFilters({ markets: [], channels: [] })}
@@ -267,6 +271,8 @@ export default function DashboardClient() {
         {/* ── OVERVIEW TAB ───────────────────────────────────────────────────── */}
         {activeTab === 'overview' && totals && (
           <div className="space-y-5">
+
+            {periodComparison && <PeriodCompareSummary result={periodComparison} />}
 
             {/* Funnel stage KPI cards */}
             {STAGES.map((stage) => {

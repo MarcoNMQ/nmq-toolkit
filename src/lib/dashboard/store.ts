@@ -6,6 +6,7 @@ import { applyMapping, detectColumns } from './columnDetect';
 import { aggregateKpis, aggregateByFunnelStage, buildTrend, buildBreakdown, applyFilters, getAvailableMetrics } from './aggregate';
 import type { MetricKey } from './metrics';
 import { getDummyRows } from './dummyData';
+import { buildPeriodComparison, type CompareMode, type DateRange, type PeriodComparisonResult } from './periodCompare';
 
 export type DataSource = 'demo' | 'upload' | 'sheet';
 export type LoadStep = 'pick' | 'map' | 'ready';
@@ -19,6 +20,12 @@ interface DashboardState {
   rawRows: Record<string, string>[];
   suggestedMapping: ColumnMapping[];
   unmappedColumns: string[];
+  // The mapping the user actually confirmed (not just the auto-suggested
+  // one, which may have been overridden in the mapper UI) — kept around
+  // after reaching 'ready' so an auditable record of "which column became
+  // which KPI" survives, e.g. for the Data Notes export slide. null for
+  // demo data, which has no raw file to map.
+  confirmedMapping: ColumnMapping[] | null;
   // Processed rows
   allRows: AdRow[];
   // Filters
@@ -40,6 +47,14 @@ interface DashboardState {
   aiLoading: boolean;
   compareContext: string | null;
 
+  // Period-over-period comparison ("Previous period" / "Previous year" /
+  // "Custom") — separate from the media-plan-vs-actuals Compare tab above.
+  periodCompareEnabled: boolean;
+  periodCompareMode: CompareMode;
+  customCompareFrom: string;
+  customCompareTo: string;
+  periodComparison: PeriodComparisonResult | null;
+
   // Actions
   loadDemo: () => void;
   setIngestData: (raw: { columns: string[]; rows: Record<string, string>[] }) => void;
@@ -48,6 +63,9 @@ interface DashboardState {
   setFilters: (patch: Partial<DashboardFilters>) => void;
   setCompareContext: (ctx: string | null) => void;
   fetchAi: (mode: 'insights' | 'recommendations') => Promise<void>;
+  setPeriodCompareEnabled: (enabled: boolean) => void;
+  setPeriodCompareMode: (mode: CompareMode) => void;
+  setCustomCompareRange: (range: DateRange) => void;
 }
 
 function defaultFilters(): DashboardFilters {
@@ -61,6 +79,14 @@ function defaultFilters(): DashboardFilters {
     funnelStages: ['awareness', 'consideration', 'conversion'],
     breakdownDim: 'category',
   };
+}
+
+function derivePeriodComparison(
+  allRows: AdRow[], filters: DashboardFilters, enabled: boolean, mode: CompareMode, customFrom: string, customTo: string,
+): PeriodComparisonResult | null {
+  if (!enabled) return null;
+  const custom = mode === 'custom' ? { from: customFrom, to: customTo } : undefined;
+  return buildPeriodComparison(allRows, filters, mode, custom);
 }
 
 function deriveAggregates(allRows: AdRow[], filters: DashboardFilters) {
@@ -83,6 +109,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   rawRows: [],
   suggestedMapping: [],
   unmappedColumns: [],
+  confirmedMapping: null,
   allRows: [],
   filters: defaultFilters(),
   totals: null,
@@ -99,9 +126,16 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   aiLoading: false,
   compareContext: null,
 
+  periodCompareEnabled: false,
+  periodCompareMode: 'previous_period',
+  customCompareFrom: '',
+  customCompareTo: '',
+  periodComparison: null,
+
   loadDemo: () => {
     const allRows = getDummyRows();
     const filters = defaultFilters();
+    const { periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo } = get();
     set({
       dataSource: 'demo',
       loadStep: 'ready',
@@ -110,6 +144,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       insightsText: '',
       recommendationsText: '',
       ...deriveAggregates(allRows, filters),
+      periodComparison: derivePeriodComparison(allRows, filters, periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo),
+      confirmedMapping: null,
     });
   },
 
@@ -125,28 +161,59 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   },
 
   confirmMapping: (mapping) => {
-    const { rawRows, filters } = get();
+    const { rawRows, filters, periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo } = get();
     const allRows = applyMapping(rawRows, mapping);
     set({
       loadStep: 'ready',
       allRows,
+      confirmedMapping: mapping,
       insightsText: '',
       recommendationsText: '',
       ...deriveAggregates(allRows, filters),
+      periodComparison: derivePeriodComparison(allRows, filters, periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo),
     });
   },
 
   resetToPickStep: () => {
-    set({ loadStep: 'pick', rawColumns: [], rawRows: [], suggestedMapping: [], unmappedColumns: [], error: null });
+    set({ loadStep: 'pick', rawColumns: [], rawRows: [], suggestedMapping: [], unmappedColumns: [], confirmedMapping: null, error: null });
   },
 
   setFilters: (patch) => {
-    const { allRows } = get();
+    const { allRows, periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo } = get();
     const filters = { ...get().filters, ...patch };
-    set({ filters, ...deriveAggregates(allRows, filters) });
+    set({
+      filters,
+      ...deriveAggregates(allRows, filters),
+      periodComparison: derivePeriodComparison(allRows, filters, periodCompareEnabled, periodCompareMode, customCompareFrom, customCompareTo),
+    });
   },
 
   setCompareContext: (ctx) => set({ compareContext: ctx }),
+
+  setPeriodCompareEnabled: (enabled) => {
+    const { allRows, filters, periodCompareMode, customCompareFrom, customCompareTo } = get();
+    set({
+      periodCompareEnabled: enabled,
+      periodComparison: derivePeriodComparison(allRows, filters, enabled, periodCompareMode, customCompareFrom, customCompareTo),
+    });
+  },
+
+  setPeriodCompareMode: (mode) => {
+    const { allRows, filters, periodCompareEnabled, customCompareFrom, customCompareTo } = get();
+    set({
+      periodCompareMode: mode,
+      periodComparison: derivePeriodComparison(allRows, filters, periodCompareEnabled, mode, customCompareFrom, customCompareTo),
+    });
+  },
+
+  setCustomCompareRange: (range) => {
+    const { allRows, filters, periodCompareEnabled, periodCompareMode } = get();
+    set({
+      customCompareFrom: range.from,
+      customCompareTo: range.to,
+      periodComparison: derivePeriodComparison(allRows, filters, periodCompareEnabled, periodCompareMode, range.from, range.to),
+    });
+  },
 
   fetchAi: async (mode) => {
     const { filters, totals, byFunnelStage, compareContext } = get();
