@@ -22,6 +22,9 @@ export function Sidebar() {
   const setPlatform = useBuilderStore((s) => s.setPlatform);
   const googleCampaigns = useBuilderStore((s) => s.googleCampaigns);
   const fbCampaigns = useBuilderStore((s) => s.fbCampaigns);
+  const pmaxCampaigns = useBuilderStore((s) => s.pmaxCampaigns);
+  const removePmaxCampaign = useBuilderStore((s) => s.removePmaxCampaign);
+  const duplicatePmaxCampaign = useBuilderStore((s) => s.duplicatePmaxCampaign);
   const removeGoogleCampaign = useBuilderStore((s) => s.removeGoogleCampaign);
   const removeFbCampaign = useBuilderStore((s) => s.removeFbCampaign);
   const duplicateGoogleCampaign = useBuilderStore((s) => s.duplicateGoogleCampaign);
@@ -216,6 +219,31 @@ export function Sidebar() {
   const hasKeywords = platform === 'google' && googleCampaigns.some((c) => c.keywords.length > 0);
   const hasSitelinks = platform === 'google' && googleCampaigns.some((c) => c.sitelinks.length > 0);
 
+  const [pmaxExporting, setPmaxExporting] = useState(false);
+  async function downloadPmaxPackage() {
+    setPmaxExporting(true);
+    try {
+      const res = await fetch('/api/campaign/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'google_pmax', campaigns: pmaxCampaigns, exportType: 'campaigns' }),
+      });
+      if (!res.ok) {
+        window.alert(`Export blocked:\n\n${await res.text()}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pmax_build_package.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setPmaxExporting(false);
+    }
+  }
+
   return (
     <>
       {mobileSidebarOpen && (
@@ -269,6 +297,14 @@ export function Sidebar() {
           >
             + New Campaign
           </button>
+          {platform === 'google' && (
+            <button
+              className="mt-2 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50"
+              onClick={() => setSelected({ type: 'new_pmax_campaign' })}
+            >
+              + New Performance Max campaign
+            </button>
+          )}
         </div>
 
         {/* Campaign tree grouped by market */}
@@ -426,6 +462,33 @@ export function Sidebar() {
               </div>
             );
           })}
+
+          {platform === 'google' && pmaxCampaigns.length > 0 && (
+            <div className="mb-1 mt-3 border-t border-ink-100 pt-2">
+              <div className="flex items-center gap-1.5 px-2 py-1">
+                <span className="flex-1 text-xs font-extrabold uppercase tracking-widest text-ink-700">Performance Max</span>
+                <span className="shrink-0 rounded-full bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-500">{pmaxCampaigns.length}</span>
+              </div>
+              <div className="ml-2 border-l-2 border-ink-100 pl-1">
+                {pmaxCampaigns.map((c) => {
+                  const isSelected = selected.type === 'pmax_campaign' && selected.campaignId === c.id;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition ${isSelected ? 'bg-mint-100 text-ink-900 font-semibold' : 'text-ink-700 hover:bg-ink-50'}`}
+                    >
+                      <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-brand-100 text-brand-600">PM</span>
+                      <button className="min-w-0 flex-1 truncate text-left" onClick={() => setSelected({ type: 'pmax_campaign', campaignId: c.id })} title={c.name}>
+                        {c.name || '(unnamed PMAX campaign)'}
+                      </button>
+                      <button className="shrink-0 opacity-0 group-hover:opacity-100" title="Duplicate" onClick={() => duplicatePmaxCampaign(c.id)}>📋</button>
+                      <button className="shrink-0 opacity-0 group-hover:opacity-100" title="Delete" onClick={() => removePmaxCampaign(c.id)}>🗑</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats */}
@@ -546,6 +609,15 @@ export function Sidebar() {
               className="mt-2 w-full rounded-md border border-ink-200 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-ink-50 disabled:opacity-40"
             >
               Export Sitelinks CSV
+            </button>
+          )}
+          {platform === 'google' && pmaxCampaigns.length > 0 && (
+            <button
+              disabled={pmaxExporting}
+              onClick={downloadPmaxPackage}
+              className="mt-2 w-full rounded-md border-2 border-brand-500 py-2 text-xs font-bold text-brand-600 transition hover:bg-brand-500 hover:text-white disabled:opacity-40"
+            >
+              {pmaxExporting ? 'Exporting…' : 'Download PMAX build package'}
             </button>
           )}
           <button

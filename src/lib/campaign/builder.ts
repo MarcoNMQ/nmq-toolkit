@@ -42,7 +42,21 @@ function defaultLabels(c: GoogleCampaign): string {
   return monthCode && year ? `${monthCode};${year}` : '';
 }
 
+/**
+ * Runtime guard matching the route-level check in api/campaign/export —
+ * this builder only ever knows how to render Search and YouTube/Demand Gen
+ * rows. Defense in depth: if it's ever called directly (e.g. a future call
+ * site, or a test) with anything else, fail loudly instead of silently
+ * emitting a Demand Gen row for an unrecognized channel.
+ */
+function assertKnownChannel(c: GoogleCampaign): void {
+  if (c.channel !== 'Search' && c.channel !== 'YouTube') {
+    throw new Error(`buildCsv: unrecognized Google channel "${c.channel || '(not set)'}" on campaign "${c.campaign_name || '—'}". Only "Search" and "YouTube" are supported here.`);
+  }
+}
+
 function buildCampaignRow(c: GoogleCampaign): CsvRow {
+  assertKnownChannel(c);
   const row = emptyRow();
   const isSearch = c.channel === 'Search';
 
@@ -93,6 +107,7 @@ function buildLocationRows(c: GoogleCampaign): CsvRow[] {
 }
 
 function buildAdRow(c: GoogleCampaign, ad: GoogleAd): CsvRow {
+  assertKnownChannel(c);
   const isSearch = c.channel === 'Search';
   const row = emptyRow();
   row['Campaign'] = c.campaign_name;

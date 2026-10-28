@@ -197,4 +197,8 @@ export type SelectedView =
   | { type: 'campaign'; campaignId: string }
   | { type: 'adgroup'; campaignId: string }
   | { type: 'new_ad'; campaignId: string }
-  | { type: 'ad'; campaignId: string; adId: string };
+  | { type: 'ad'; campaignId: string; adId: string }
+  // Performance Max campaigns live in their own store collection
+  // (pmaxCampaigns), never inside GoogleCampaign — see pmax/pmaxTypes.ts.
+  | { type: 'new_pmax_campaign' }
+  | { type: 'pmax_campaign'; campaignId: string };

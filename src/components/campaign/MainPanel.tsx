@@ -6,6 +6,7 @@ import { GoogleCampaignForm } from '@/components/campaign/google/GoogleCampaignF
 import { GoogleAdForm } from '@/components/campaign/google/GoogleAdForm';
 import { FbCampaignForm } from '@/components/campaign/facebook/FbCampaignForm';
 import { FbAdForm } from '@/components/campaign/facebook/FbAdForm';
+import { PmaxCampaignForm } from '@/components/campaign/pmax/PmaxCampaignForm';
 
 export function MainPanel() {
   const platform = useBuilderStore((s) => s.platform);
@@ -15,6 +16,7 @@ export function MainPanel() {
   const addFbCampaign = useBuilderStore((s) => s.addFbCampaign);
   const addGoogleAd = useBuilderStore((s) => s.addGoogleAd);
   const addFbAd = useBuilderStore((s) => s.addFbAd);
+  const addPmaxCampaign = useBuilderStore((s) => s.addPmaxCampaign);
 
   // Handle "new_campaign" / "new_ad" intents by creating the item then
   // redirecting selection to it, so forms always edit a concrete id and all
@@ -31,10 +33,17 @@ export function MainPanel() {
     } else if (selected.type === 'new_ad') {
       const adId = platform === 'google' ? addGoogleAd(selected.campaignId) : addFbAd(selected.campaignId);
       setSelected({ type: 'ad', campaignId: selected.campaignId, adId });
+    } else if (selected.type === 'new_pmax_campaign') {
+      const id = addPmaxCampaign();
+      setSelected({ type: 'pmax_campaign', campaignId: id });
     }
-  }, [selected, platform, addGoogleCampaign, addFbCampaign, addGoogleAd, addFbAd, setSelected]);
+  }, [selected, platform, addGoogleCampaign, addFbCampaign, addGoogleAd, addFbAd, addPmaxCampaign, setSelected]);
 
-  if (selected.type === 'welcome' || selected.type === 'new_campaign') {
+  if (selected.type === 'pmax_campaign') {
+    return <PmaxCampaignForm campaignId={selected.campaignId} />;
+  }
+
+  if (selected.type === 'welcome' || selected.type === 'new_campaign' || selected.type === 'new_pmax_campaign') {
     return (
       <div className="flex flex-1 items-center justify-center text-ink-400">
         <div className="text-center">
