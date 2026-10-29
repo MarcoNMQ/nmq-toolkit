@@ -8,7 +8,6 @@ const tools = [
   {
     href: '/campaign-builder',
     label: 'Campaign Builder',
-    disabled: true,
     descriptions: [
       'Brief in, bulk upload out. Because life\'s too short to type campaign names manually.',
       'Turn a client brief into 47 ad copies before your second coffee. Naming conventions included.',
@@ -41,7 +40,6 @@ const tools = [
   {
     href: '/dashboard',
     label: 'Performance Dashboard',
-    disabled: true,
     descriptions: [
       'Your campaign data, in something that isn\'t a pivot table that crashes on Fridays.',
       'Upload the export, let Claude say what you already suspected but couldn\'t prove.',
@@ -58,7 +56,6 @@ const tools = [
   {
     href: '/insights',
     label: 'AI Insight Generator',
-    disabled: true,
     descriptions: [
       'Drop in a CSV, get back a strategy memo. Therapists hate this one trick.',
       'Claude reads your campaign data so you don\'t have to explain why the CTR is 0.4%.',
@@ -144,33 +141,7 @@ export default function Home() {
                   transition={{ duration: 0.45, delay: i * 0.1 }}
                   className="h-full"
                 >
-                  {tool.disabled ? (
-                    <div
-                      aria-disabled="true"
-                      className="group relative flex h-full cursor-not-allowed flex-col overflow-hidden rounded-2xl bg-white opacity-50 shadow-md grayscale"
-                    >
-                      {/* Dark icon section */}
-                      <div className="relative flex items-center justify-center overflow-hidden bg-[#1a1a1a]" style={{ height: 200 }}>
-                        <div className="relative h-20 w-20" style={{ color: 'white' }}>
-                          {tool.icon}
-                        </div>
-                      </div>
-
-                      {/* White content section */}
-                      <div className="flex flex-1 flex-col p-6">
-                        <h2 className="text-lg font-extrabold leading-snug text-ink-400">
-                          {tool.label}
-                        </h2>
-                        <p className="mt-2 flex-1 text-sm leading-relaxed text-ink-400">
-                          {desc}
-                        </p>
-                        <span className="mt-5 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-ink-400">
-                          Temporarily unavailable
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <Link
+                  <Link
                       href={tool.href}
                       className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-md transition-all duration-300 hover:-translate-y-1.5"
                       onMouseEnter={(e) => {
@@ -217,7 +188,6 @@ export default function Home() {
                         </span>
                       </div>
                     </Link>
-                  )}
                 </motion.div>
               );
             })}

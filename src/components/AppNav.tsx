@@ -6,10 +6,10 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const TOOLS = [
-  { href: '/campaign-builder', label: 'Campaign',   full: 'Campaign Builder', disabled: true },
+  { href: '/campaign-builder', label: 'Campaign',   full: 'Campaign Builder' },
   { href: '/media-plan',       label: 'Media Plan', full: 'Media Plan Builder' },
-  { href: '/dashboard',        label: 'Dashboard',  full: 'Performance Dashboard', disabled: true },
-  { href: '/insights',         label: 'AI Insights', full: 'AI Insight Generator', disabled: true },
+  { href: '/dashboard',        label: 'Dashboard',  full: 'Performance Dashboard' },
+  { href: '/insights',         label: 'AI Insights', full: 'AI Insight Generator' },
 ];
 
 export default function AppNav() {
@@ -39,17 +39,6 @@ export default function AppNav() {
         <div className="flex gap-0.5">
           {TOOLS.map((t) => {
             const active = pathname === t.href || pathname.startsWith(t.href + '/');
-            if (t.disabled) {
-              return (
-                <span
-                  key={t.href}
-                  title={`${t.full} (temporarily unavailable)`}
-                  className="relative cursor-not-allowed rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-300"
-                >
-                  {t.label}
-                </span>
-              );
-            }
             return (
               <Link
                 key={t.href}
