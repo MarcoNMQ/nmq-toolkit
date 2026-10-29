@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import { CoruscantError, CORUSCANT_MODEL_STRONG, coruscantText, type CoruscantMessage } from '@/lib/coruscant';
 import { buildPlanSummary } from '@/lib/mediaplan/aiContext';
 import { marketBudget } from '@/lib/mediaplan/budgets';
 import { MARKET_LABELS } from '@/lib/mediaplan/constants';
@@ -11,9 +10,6 @@ import type { AiChatKind, ChatMessage, PlanConfig, Scenario } from '@/lib/mediap
 // turn after that is plain (the API call still receives full history
 // either way, since Anthropic's API is stateless per-call).
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
-
   const { kind, scenario, plan, history, userInput } = await req.json() as {
     kind: AiChatKind; scenario: Scenario; plan: PlanConfig; history: ChatMessage[]; userInput: string;
   };
@@ -38,14 +34,17 @@ export async function POST(req: NextRequest) {
     systemCtx = `You are a senior paid media strategist advising a ${plan.audience} client in the ${plan.industry || 'general'} sector. The plan uses these channels: ${channelsInUse.join(', ') || 'various digital channels'}. Benchmarks in use:\n${benchLines.join('\n')}\n\nAnswer in 80–150 words. Be direct, reference actual numbers, frame for ${plan.audience} ${plan.industry}. No bullet points.`;
   }
 
-  const apiMessages: MessageParam[] = history.map((m, i) => (
+  const apiMessages: CoruscantMessage[] = history.map((m, i) => (
     i === 0 && m.role === 'user' ? { role: 'user', content: `${systemCtx}\n\n---\n\n${m.content}` } : { role: m.role, content: m.content }
   ));
   const firstTurn = history.length === 0;
   apiMessages.push({ role: 'user', content: firstTurn ? `${systemCtx}\n\n---\n\n${userInput}` : userInput });
 
-  const client = new Anthropic({ apiKey });
-  const message = await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 400, messages: apiMessages });
-  const text = message.content.find((b) => b.type === 'text');
-  return NextResponse.json({ reply: text && text.type === 'text' ? text.text : '' });
+  try {
+    const reply = await coruscantText({ model: CORUSCANT_MODEL_STRONG, maxTokens: 400, messages: apiMessages });
+    return NextResponse.json({ reply });
+  } catch (err) {
+    const message = err instanceof CoruscantError || err instanceof Error ? err.message : 'Unknown error calling the Coruscant gateway';
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }

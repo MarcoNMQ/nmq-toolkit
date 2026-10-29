@@ -1,6 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { CORUSCANT_MODEL, CORUSCANT_MODEL_STRONG, coruscantTextStream } from '@/lib/coruscant';
 
 const SYSTEM_PROMPT = `You are a senior paid media strategist at NMQ Digital. You receive a structured summary of paid media campaign data and write a sharp, specific analysis.
 
@@ -42,37 +40,24 @@ export const runtime = 'nodejs';
 export async function POST(req: Request) {
   const { context, deepMode } = await req.json() as { context: string; deepMode?: boolean };
 
-  const model = deepMode ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+  const model = deepMode ? CORUSCANT_MODEL_STRONG : CORUSCANT_MODEL;
 
-  const stream = anthropic.messages.stream({
-    model,
-    max_tokens: 1800,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: context }],
-  });
+  try {
+    const readable = await coruscantTextStream({
+      model,
+      maxTokens: 1800,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: context }],
+    });
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const event of stream) {
-          if (
-            event.type === 'content_block_delta' &&
-            event.delta.type === 'text_delta'
-          ) {
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
-        }
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-    },
-  });
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error calling the Coruscant gateway';
+    return new Response(message, { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
 }

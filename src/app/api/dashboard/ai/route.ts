@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { CORUSCANT_MODEL_STRONG, coruscantText } from '@/lib/coruscant';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -54,13 +52,11 @@ Format: numbered list, action-first language ("Increase...", "Shift budget...", 
   const prompt = prompts[mode] ?? prompts.insights;
 
   try {
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
+    const text = await coruscantText({
+      model: CORUSCANT_MODEL_STRONG,
+      maxTokens: 600,
       messages: [{ role: 'user', content: prompt }],
     });
-
-    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
     return NextResponse.json({ text });
   } catch (err) {
     console.error('[dashboard/ai]', err);

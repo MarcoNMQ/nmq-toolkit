@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { CoruscantError, CORUSCANT_MODEL_STRONG, coruscantText } from '@/lib/coruscant';
 import { BENCHMARK_SOURCES, buildPlanSummary } from '@/lib/mediaplan/aiContext';
 import { marketBudget } from '@/lib/mediaplan/budgets';
 import { MARKET_LABELS } from '@/lib/mediaplan/constants';
@@ -10,9 +10,6 @@ import type { AiChatKind, PlanConfig, Scenario } from '@/lib/mediaplan/types';
 // media_plan.py — one-shot prompts (not chat), each framed for the
 // plan's actual audience/industry/numbers.
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
-
   const { kind, scenario, plan } = await req.json() as { kind: AiChatKind; scenario: Scenario; plan: PlanConfig };
   const summary = buildPlanSummary(scenario, plan);
   const channelsInUse = [...new Set(scenario.markets.flatMap((m) => m.goals.flatMap((g) => g.channels.map((c) => c.channel))))];
@@ -97,12 +94,15 @@ Reference sources:
 ${BENCHMARK_SOURCES}`;
   }
 
-  const client = new Anthropic({ apiKey });
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  const text = message.content.find((b) => b.type === 'text');
-  return NextResponse.json({ text: text && text.type === 'text' ? text.text : '' });
+  try {
+    const text = await coruscantText({
+      model: CORUSCANT_MODEL_STRONG,
+      maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return NextResponse.json({ text });
+  } catch (err) {
+    const message = err instanceof CoruscantError || err instanceof Error ? err.message : 'Unknown error calling the Coruscant gateway';
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }
