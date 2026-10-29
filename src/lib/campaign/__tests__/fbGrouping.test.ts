@@ -5,6 +5,7 @@ import type { FbCampaign } from '../types';
 function makeCard(overrides: Partial<FbCampaign>): FbCampaign {
   return {
     id: Math.random().toString(36),
+    client_profile: '',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -79,6 +80,13 @@ describe('fbGroupingErrors — same ad set name across cards', () => {
     const b = makeCard({ adset_name: 'Ad Set B', campaign_objective: 'OUTCOME_LEADS' });
     const errors = fbGroupingErrors([a, b]);
     expect(errors.some((e) => /Campaign objective/.test(e))).toBe(true);
+  });
+
+  it('blocks export when ad sets of the same campaign disagree on client — different clients mean different Facebook Pages', () => {
+    const a = makeCard({ adset_name: 'Ad Set A', client_profile: 'Shimano' });
+    const b = makeCard({ adset_name: 'Ad Set B', client_profile: 'Lineage' });
+    const errors = fbGroupingErrors([a, b]);
+    expect(errors.some((e) => /Client/.test(e))).toBe(true);
   });
 
   it('treats two different ad set names in the same campaign as fine when nothing else conflicts', () => {

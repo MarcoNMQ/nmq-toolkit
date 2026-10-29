@@ -1,6 +1,7 @@
 'use client';
 
 import { useBuilderStore } from '@/lib/campaign/store';
+import { useClientsStore } from '@/lib/clients/store';
 import {
   FB_CAMPAIGN_OBJECTIVES, FB_BUYING_TYPES, FB_CAMPAIGN_BID_STRATEGIES,
   FB_ADSET_BID_STRATEGIES, FB_OPTIMIZATION_GOALS, FB_BILLING_EVENTS,
@@ -20,8 +21,14 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
   const setSelected = useBuilderStore((s) => s.setSelected);
   const allCampaigns = useBuilderStore((s) => s.fbCampaigns);
   const applySettingsFrom = useBuilderStore((s) => s.applyFbCampaignSettingsFrom);
+  const clients = useClientsStore((s) => s.clients);
+  const addClient = useClientsStore((s) => s.addClient);
+  const removeClient = useClientsStore((s) => s.removeClient);
+  const setClientFacebookPageId = useClientsStore((s) => s.setClientFacebookPageId);
 
   if (!campaign) return null;
+
+  const selectedClient = clients.find((c) => c.name === campaign.client_profile);
 
   // Other ad sets with the same campaign name = same Meta campaign.
   const siblings = fbSiblings(allCampaigns, campaignId);
@@ -96,6 +103,55 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
           </div>
         </div>
       )}
+
+      <Field
+        label="Client"
+        hint="Resolves this campaign's Facebook Page automatically at export (Meta requires knowing which Page runs each ad) — each client can run from its own Page."
+      >
+        <div className="flex gap-2">
+          <Select
+            value={campaign.client_profile}
+            onChange={(e) => {
+              if (e.target.value === '__add__') {
+                const name = window.prompt('New client name:');
+                const entry = name ? addClient(name) : null;
+                if (entry) patch({ client_profile: entry.name });
+                return;
+              }
+              patch({ client_profile: e.target.value });
+            }}
+          >
+            <option value="">— None —</option>
+            {clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            <option value="__add__">+ Add new client…</option>
+          </Select>
+          {campaign.client_profile && (
+            <button
+              type="button"
+              title={`Remove "${campaign.client_profile}" from the client list`}
+              onClick={() => {
+                if (selectedClient && window.confirm(`Remove "${selectedClient.name}" from the client list?`)) {
+                  removeClient(selectedClient.id);
+                  patch({ client_profile: '' });
+                }
+              }}
+              className="rounded-md border border-ink-200 px-2 text-xs text-ink-400 hover:border-red-300 hover:text-red-500"
+            >
+              🗑
+            </button>
+          )}
+        </div>
+        {selectedClient && (
+          <label className="mt-2 flex flex-col gap-0.5 text-xs">
+            <span className="font-semibold text-ink-600">{selectedClient.name}&rsquo;s Facebook Page ID</span>
+            <TextInput
+              value={selectedClient.facebookPageId ?? ''}
+              onChange={(e) => setClientFacebookPageId(selectedClient.id, e.target.value)}
+              placeholder="e.g. 123456789012345"
+            />
+          </label>
+        )}
+      </Field>
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Campaign name">

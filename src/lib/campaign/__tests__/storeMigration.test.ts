@@ -22,8 +22,15 @@ describe('migrateBuilderState', () => {
     expect(migrated.googleCampaigns).toEqual(googleCampaigns);
   });
 
-  it('preserves existing Facebook campaign data exactly', () => {
+  it('preserves existing Facebook campaign data, backfilling client_profile for pre-client-profile data', () => {
     const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test' }];
+    const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
+    const migrated = migrateBuilderState(legacy);
+    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: '' }]);
+  });
+
+  it('leaves an already-set client_profile untouched', () => {
+    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano' }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
     expect(migrated.fbCampaigns).toEqual(fbCampaigns);

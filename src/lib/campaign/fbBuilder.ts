@@ -34,13 +34,24 @@ function toIso(codes: string[]): string {
   return codes.map((c) => FB_COUNTRY_ISO[c] ?? c).join(',');
 }
 
+/** `clientPageIds` maps a client name (FbCampaign.client_profile, matching
+ *  useClientsStore's ClientEntry.name) to that client's Facebook Page ID —
+ *  each client can run from its own Page, so this is resolved per campaign
+ *  rather than a single value for the whole export. */
+export type ClientPageIds = Record<string, string>;
+
+function resolvePageId(owner: FbCampaign, clientPageIds: ClientPageIds): string {
+  return clientPageIds[owner.client_profile] ?? '';
+}
+
 /** Build the Facebook Ads Manager .xlsx file, one row per ad. */
-export async function buildFbExcel(campaigns: FbCampaign[], facebookPageId = ''): Promise<Buffer> {
+export async function buildFbExcel(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
 
   for (const { card: camp, owner, name } of exportOrder(campaigns)) {
+    const pageId = resolvePageId(owner, clientPageIds);
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
@@ -50,8 +61,8 @@ export async function buildFbExcel(campaigns: FbCampaign[], facebookPageId = '')
       // Every ad needs a Link Object ID so Meta knows which Page is
       // running it — a story/existing-post ad already runs from a real
       // post on the Page, so it doesn't need this.
-      if (facebookPageId && ad.ad_type !== 'existing_post') {
-        row['Link Object ID'] = `o:${facebookPageId}`;
+      if (pageId && ad.ad_type !== 'existing_post') {
+        row['Link Object ID'] = `o:${pageId}`;
       }
       row['Campaign Status'] = owner.campaign_status || 'PAUSED';
       row['Special Ad Categories'] = 'none';
@@ -140,7 +151,7 @@ export async function buildFbExcel(campaigns: FbCampaign[], facebookPageId = '')
  * Facebook then attaches the new ads to existing campaigns/ad sets by name
  * instead of creating duplicate campaign structures.
  */
-export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], facebookPageId = ''): Promise<Buffer> {
+export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
@@ -157,7 +168,8 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], facebookPageI
     'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
   ]);
 
-  for (const { card: camp, name } of exportOrder(campaigns)) {
+  for (const { card: camp, owner, name } of exportOrder(campaigns)) {
+    const pageId = resolvePageId(owner, clientPageIds);
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
@@ -167,8 +179,8 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], facebookPageI
       row['Link'] = ad.link ?? '';
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
-      if (facebookPageId && ad.ad_type !== 'existing_post') {
-        row['Link Object ID'] = `o:${facebookPageId}`;
+      if (pageId && ad.ad_type !== 'existing_post') {
+        row['Link Object ID'] = `o:${pageId}`;
       }
 
       if (ad.ad_type === 'existing_post') {
@@ -198,24 +210,23 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], facebookPageI
   return Buffer.from(arrayBuffer);
 }
 
-export function validateFbCampaigns(campaigns: FbCampaign[], facebookPageId = ''): string[] {
+export function validateFbCampaigns(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): string[] {
   const errors: string[] = [];
   if (!campaigns || campaigns.length === 0) {
     errors.push('Add at least one campaign before exporting.');
     return errors;
   }
 
-  // Every ad that isn't promoting an existing post needs a Link Object ID
-  // (`o:<Page ID>`) so Meta knows which Page is running it — this is a
-  // single workspace-level setting (see the Facebook Page ID field in the
-  // sidebar), so one missing-setting error covers every affected ad rather
-  // than repeating it per ad.
-  if (!facebookPageId && campaigns.some((c) => (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post'))) {
-    errors.push('Set a Facebook Page ID in the sidebar before exporting — Meta requires it on every new ad.');
-  }
-
   campaigns.forEach((c, i) => {
     const label = `Campaign ${i + 1} (${c.campaign_name || '—'})`;
+    if (!c.client_profile) errors.push(`${label}: Pick a client — Meta requires knowing which Facebook Page runs this campaign.`);
+    // Every ad that isn't promoting an existing post needs a Link Object ID
+    // (`o:<Page ID>`), resolved from the campaign's client. A client with no
+    // Page ID set is a separate, more specific error than "no client picked"
+    // at all, so it's only checked once a client IS selected.
+    else if (!clientPageIds[c.client_profile] && (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post')) {
+      errors.push(`${label}: "${c.client_profile}" has no Facebook Page ID set yet — add one in the client list before exporting.`);
+    }
     if (!c.campaign_name) errors.push(`${label}: Campaign Name is required.`);
     if (!c.adset_name) errors.push(`${label}: Ad Set Name is required.`);
     if (!c.campaign_objective) errors.push(`${label}: Campaign Objective is required.`);

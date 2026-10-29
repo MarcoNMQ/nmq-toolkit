@@ -11,28 +11,34 @@ const STORAGE_KEY = 'nmq-campaign-builder-store';
  *  normalizing for (see `migrate` below). There was no version/migrate at
  *  all before this — any pre-existing persisted state has an implicit
  *  version of 0. */
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
 /**
- * There was no version/migrate at all before STORE_VERSION 1 — any
- * pre-existing persisted state in a user's browser has no `pmaxCampaigns`
- * key yet. Zustand calls this with that old state and version 0 (its
- * default for "no version recorded") whenever the stored version doesn't
- * match STORE_VERSION; existing Search/YouTube/Demand Gen/Facebook data
- * passes through untouched — this only fills in the new collection so it's
- * never undefined. Exported (not inlined in the persist config) so it's
- * directly unit-testable without spinning up the whole store/localStorage.
+ * v0 → v1: there was no version/migrate at all before — any pre-existing
+ * persisted state in a user's browser has no `pmaxCampaigns` key yet.
+ * Zustand calls this with that old state and version 0 (its default for
+ * "no version recorded") whenever the stored version doesn't match
+ * STORE_VERSION; existing Search/YouTube/Demand Gen/Facebook data passes
+ * through untouched — this only fills in the new collection so it's never
+ * undefined.
+ * v1 → v2: FbCampaign gained `client_profile` (resolves a client's Facebook
+ * Page ID automatically at export). Existing Facebook campaigns have no
+ * such key — backfilled to '' so every read of it is a string, matching
+ * the type, instead of `undefined` reaching a controlled <select>.
+ * Exported (not inlined in the persist config) so it's directly
+ * unit-testable without spinning up the whole store/localStorage.
  */
 export function migrateBuilderState(persistedState: unknown): Pick<BuilderState, 'platform' | 'googleCampaigns' | 'fbCampaigns' | 'pmaxCampaigns' | 'selected' | 'expanded'> {
   const state = (persistedState ?? {}) as Record<string, unknown>;
+  const fbCampaigns = Array.isArray(state.fbCampaigns) ? (state.fbCampaigns as FbCampaign[]) : [];
   return {
     platform: (state.platform as BuilderState['platform']) ?? 'google',
     googleCampaigns: Array.isArray(state.googleCampaigns) ? (state.googleCampaigns as GoogleCampaign[]) : [],
-    fbCampaigns: Array.isArray(state.fbCampaigns) ? (state.fbCampaigns as FbCampaign[]) : [],
+    fbCampaigns: fbCampaigns.map((c) => ({ ...c, client_profile: c.client_profile ?? '' })),
     pmaxCampaigns: Array.isArray(state.pmaxCampaigns) ? (state.pmaxCampaigns as PmaxCampaign[]) : [],
     selected: (state.selected as SelectedView) ?? { type: 'welcome' },
     expanded: (state.expanded as Record<string, boolean>) ?? {},
@@ -147,6 +153,7 @@ export function newFbAd(): FbAd {
 export function newFbCampaign(): FbCampaign {
   return {
     id: uid(),
+    client_profile: '',
     campaign_name: '',
     campaign_status: 'PAUSED',
     campaign_objective: '',
@@ -181,15 +188,6 @@ export function newFbCampaign(): FbCampaign {
 interface BuilderState {
   platform: Platform;
   setPlatform: (p: Platform) => void;
-
-  /** The Facebook Page every Facebook ad is attributed to (Meta's bulk
-   *  upload requires a "Link Object ID" — `o:<Page ID>` — on every ad row).
-   *  A single workspace-level setting rather than a per-campaign field,
-   *  since this tool is used one client at a time and that client's
-   *  campaigns all run from the same Page. Auto-applied at export time in
-   *  fbBuilder.ts — nothing needs to be typed per campaign or per ad. */
-  facebookPageId: string;
-  setFacebookPageId: (id: string) => void;
 
   googleCampaigns: GoogleCampaign[];
   fbCampaigns: FbCampaign[];
@@ -290,9 +288,6 @@ export const useBuilderStore = create<BuilderState>()(
       const c = newFbCampaign();
       return { platform: p, fbCampaigns: [...state.fbCampaigns, c], selected: { type: 'campaign', campaignId: c.id }, mobileSidebarOpen: false };
     }),
-
-  facebookPageId: '',
-  setFacebookPageId: (id) => set({ facebookPageId: id }),
 
   googleCampaigns: [],
   fbCampaigns: [],
@@ -708,7 +703,6 @@ export const useBuilderStore = create<BuilderState>()(
       // open/closed state — that should always start closed on load.
       partialize: (state) => ({
         platform: state.platform,
-        facebookPageId: state.facebookPageId,
         googleCampaigns: state.googleCampaigns,
         fbCampaigns: state.fbCampaigns,
         pmaxCampaigns: state.pmaxCampaigns,

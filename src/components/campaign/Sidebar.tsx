@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
+import { useClientsStore } from '@/lib/clients/store';
 import { validateCampaigns } from '@/lib/campaign/builder';
 import { validateFbCampaigns } from '@/lib/campaign/fbBuilder';
 import { groupFbCampaigns } from '@/lib/campaign/fbGrouping';
@@ -20,8 +21,11 @@ function getMarket(c: AnyCampaign): string {
 export function Sidebar() {
   const platform = useBuilderStore((s) => s.platform);
   const setPlatform = useBuilderStore((s) => s.setPlatform);
-  const facebookPageId = useBuilderStore((s) => s.facebookPageId);
-  const setFacebookPageId = useBuilderStore((s) => s.setFacebookPageId);
+  const clients = useClientsStore((s) => s.clients);
+  const clientPageIds = useMemo(
+    () => Object.fromEntries(clients.filter((c) => c.facebookPageId).map((c) => [c.name, c.facebookPageId!])),
+    [clients],
+  );
   const googleCampaigns = useBuilderStore((s) => s.googleCampaigns);
   const fbCampaigns = useBuilderStore((s) => s.fbCampaigns);
   const pmaxCampaigns = useBuilderStore((s) => s.pmaxCampaigns);
@@ -137,8 +141,8 @@ export function Sidebar() {
   }, [campaigns]);
 
   const errors = useMemo(
-    () => (platform === 'google' ? validateCampaigns(googleCampaigns) : validateFbCampaigns(fbCampaigns, facebookPageId)),
-    [platform, googleCampaigns, fbCampaigns, facebookPageId],
+    () => (platform === 'google' ? validateCampaigns(googleCampaigns) : validateFbCampaigns(fbCampaigns, clientPageIds)),
+    [platform, googleCampaigns, fbCampaigns, clientPageIds],
   );
 
   // Facebook ad sets sharing a campaign name are ONE campaign with ONE
@@ -186,7 +190,7 @@ export function Sidebar() {
       const res = await fetch('/api/campaign/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, campaigns: subset, exportType, facebookPageId }),
+        body: JSON.stringify({ platform, campaigns: subset, exportType, clientPageIds }),
       });
       if (!res.ok) {
         window.alert(`Export failed:\n\n${await res.text()}`);
@@ -291,18 +295,6 @@ export function Sidebar() {
               Facebook
             </button>
           </div>
-          {platform === 'facebook' && (
-            <label className="mt-2 flex flex-col gap-0.5 text-xs" title="Applied automatically to every ad's Link Object ID (o:<Page ID>) at export — Meta requires it to know which Page is running the ad. Set once; it's remembered for every campaign.">
-              <span className="font-semibold text-ink-600">Facebook Page ID</span>
-              <input
-                type="text"
-                value={facebookPageId}
-                onChange={(e) => setFacebookPageId(e.target.value.trim())}
-                placeholder="e.g. 123456789012345"
-                className="rounded-md border border-ink-200 px-2 py-1 text-xs outline-none focus:border-brand-500"
-              />
-            </label>
-          )}
         </div>
 
         {/* New campaign */}

@@ -5,6 +5,7 @@ import type { FbCampaign } from '../types';
 function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: Math.random().toString(36),
+    client_profile: 'Shimano',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -43,8 +44,8 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
 }
 
 describe('validateFbCampaigns — required fields', () => {
-  it('passes a fully filled-in campaign with no errors, given a Page ID', () => {
-    expect(validateFbCampaigns([makeCard()], '123456789012345')).toEqual([]);
+  it('passes a fully filled-in campaign with no errors, given its client has a Page ID', () => {
+    expect(validateFbCampaigns([makeCard()], { Shimano: '123456789012345' })).toEqual([]);
   });
 
   it('reports no campaigns at all', () => {
@@ -130,18 +131,28 @@ describe('validateFbCampaigns — per-ad checks', () => {
   });
 });
 
-describe('validateFbCampaigns — Facebook Page ID (Link Object ID)', () => {
-  it('blocks export when no Page ID is set and a new-creative ad exists', () => {
-    const errors = validateFbCampaigns([makeCard()]);
-    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(true);
+describe('validateFbCampaigns — client/Page ID resolution (Link Object ID)', () => {
+  it('blocks export when no client is picked at all', () => {
+    const errors = validateFbCampaigns([makeCard({ client_profile: '' })]);
+    expect(errors.some((e) => /Pick a client/.test(e))).toBe(true);
   });
 
-  it('does not block once a Page ID is provided', () => {
-    const errors = validateFbCampaigns([makeCard()], '123456789012345');
+  it("blocks export when a client is picked but that client has no Page ID set", () => {
+    const errors = validateFbCampaigns([makeCard()], {});
+    expect(errors.some((e) => /"Shimano" has no Facebook Page ID set/.test(e))).toBe(true);
+  });
+
+  it('does not block once the selected client has a Page ID set', () => {
+    const errors = validateFbCampaigns([makeCard()], { Shimano: '123456789012345' });
     expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(false);
   });
 
-  it('does not require a Page ID when every ad promotes an existing post', () => {
+  it('only resolves the Page ID for the matching client — an unrelated client\'s Page ID does not count', () => {
+    const errors = validateFbCampaigns([makeCard()], { Lineage: '999999999999999' });
+    expect(errors.some((e) => /"Shimano" has no Facebook Page ID set/.test(e))).toBe(true);
+  });
+
+  it('does not require a Page ID when every ad promotes an existing post, even with no client Page ID set', () => {
     const base = makeCard();
     const card = {
       ...base,

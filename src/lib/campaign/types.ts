@@ -151,6 +151,12 @@ export interface FbAd {
 
 export interface FbCampaign {
   id: string;
+  // Which client this campaign belongs to — matches a name in useClientsStore
+  // (src/lib/clients/store.ts), the same shared client roster GoogleCampaign
+  // uses. Resolves the client's Facebook Page ID automatically at export
+  // time (see fbBuilder.ts) — Shimano, for example, runs from its own Page,
+  // distinct from any other client's.
+  client_profile: string;
   campaign_name: string;
   campaign_status: string;
   campaign_objective: string;

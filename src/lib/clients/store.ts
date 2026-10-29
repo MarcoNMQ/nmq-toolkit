@@ -15,6 +15,13 @@ import { persist } from 'zustand/middleware';
 export interface ClientEntry {
   id: string;
   name: string;
+  // Meta bulk upload requires a "Link Object ID" (o:<Page ID>) on every
+  // Facebook ad so it knows which Page is running it. Each client can run
+  // from its own Page (Shimano's own Page is distinct from any other
+  // client's), so this lives here rather than as a single global setting —
+  // set once per client, resolved automatically for every campaign under
+  // that client at export time (see fbBuilder.ts).
+  facebookPageId?: string;
 }
 
 function uid(): string {
@@ -26,6 +33,7 @@ interface ClientsState {
   addClient: (name: string) => ClientEntry | null;
   removeClient: (id: string) => void;
   renameClient: (id: string, name: string) => void;
+  setClientFacebookPageId: (id: string, facebookPageId: string) => void;
 }
 
 export const useClientsStore = create<ClientsState>()(
@@ -53,6 +61,10 @@ export const useClientsStore = create<ClientsState>()(
 
       renameClient: (id, name) => set((s) => ({
         clients: s.clients.map((c) => (c.id === id ? { ...c, name: name.trim() || c.name } : c)),
+      })),
+
+      setClientFacebookPageId: (id, facebookPageId) => set((s) => ({
+        clients: s.clients.map((c) => (c.id === id ? { ...c, facebookPageId: facebookPageId.trim() } : c)),
       })),
     }),
     { name: 'nmq-clients-store' },

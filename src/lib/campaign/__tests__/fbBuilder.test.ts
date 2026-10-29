@@ -7,6 +7,7 @@ import type { FbCampaign } from '../types';
 function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: 'c1',
+    client_profile: 'Shimano',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -61,19 +62,25 @@ async function readRows(buf: Buffer): Promise<Record<string, string>[]> {
 }
 
 describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
-  it('sets Link Object ID as o:<pageId> on a new-creative ad when a Page ID is given', async () => {
-    const buf = await buildFbExcel([makeCard()], '123456789012345');
+  it("sets Link Object ID as o:<pageId> on a new-creative ad, resolved from the campaign's client", async () => {
+    const buf = await buildFbExcel([makeCard()], { Shimano: '123456789012345' });
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
   });
 
-  it('leaves Link Object ID blank when no Page ID is given', async () => {
-    const buf = await buildFbExcel([makeCard()]);
+  it('leaves Link Object ID blank when the client has no Page ID set', async () => {
+    const buf = await buildFbExcel([makeCard()], {});
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
-  it('does not set Link Object ID on an existing-post ad, even with a Page ID given', async () => {
+  it("does not resolve a Page ID from an unrelated client's entry", async () => {
+    const buf = await buildFbExcel([makeCard()], { Lineage: '999999999999999' });
+    const rows = await readRows(buf);
+    expect(rows[0]['Link Object ID']).toBe('');
+  });
+
+  it('does not set Link Object ID on an existing-post ad, even when its client has a Page ID set', async () => {
     const base = makeCard();
     const card = {
       ...base,
@@ -81,13 +88,13 @@ describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
         ...base.ads[0], ad_type: 'existing_post' as const, story_id: 's:123',
       }],
     };
-    const buf = await buildFbExcel([card], '123456789012345');
+    const buf = await buildFbExcel([card], { Shimano: '123456789012345' });
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
   it('also populates Link Object ID in the ads-only export', async () => {
-    const buf = await buildFbAdsOnlyExcel([makeCard()], '123456789012345');
+    const buf = await buildFbAdsOnlyExcel([makeCard()], { Shimano: '123456789012345' });
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
   });
