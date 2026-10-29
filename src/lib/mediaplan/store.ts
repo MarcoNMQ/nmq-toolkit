@@ -21,6 +21,7 @@ function newChannelConfig(market: string, channel: Channel, splitPct = 100): Cha
     },
     liFormat,
     amazonFormat,
+    benchmarkSource: 'default',
   };
 }
 
@@ -86,6 +87,7 @@ interface MediaPlanState {
   setChannelSplitPctAndRebalance: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, pct: number) => void;
   setChannelActiveRange: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, activeFrom?: string, activeTo?: string) => void;
   setChannelBenchmarkField: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, field: string, value: number | undefined) => void;
+  setChannelBenchmarkAi: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, values: Record<string, number>) => void;
   setChannelLiFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: LinkedInFormat) => void;
   setChannelAmazonFormat: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, format: AmazonFormat) => void;
   applyBenchPreset: (scenarioId: string, market: string, goal: GoalConfig['goal'], channelId: string, preset: 'Conservative' | 'Average' | 'Aggressive') => void;
@@ -296,7 +298,14 @@ export const useMediaPlanStore = create<MediaPlanState>()(
       setChannelBenchmarkField: (scenarioId, market, goal, channelId, field, value) => set((state) => ({
         scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
           ...g,
-          channels: g.channels.map((c) => (c.id === channelId ? { ...c, benchmark: { ...c.benchmark, [field]: value } } : c)),
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, benchmark: { ...c.benchmark, [field]: value }, benchmarkSource: 'manual' } : c)),
+        })))),
+      })),
+
+      setChannelBenchmarkAi: (scenarioId, market, goal, channelId, values) => set((state) => ({
+        scenarios: updateScenario(state.scenarios, scenarioId, (s) => updateMarket(s, market, (m) => updateGoal(m, goal, (g) => ({
+          ...g,
+          channels: g.channels.map((c) => (c.id === channelId ? { ...c, benchmark: { ...c.benchmark, ...values }, benchmarkSource: 'ai' } : c)),
         })))),
       })),
 
@@ -317,6 +326,11 @@ export const useMediaPlanStore = create<MediaPlanState>()(
             ...c,
             liFormat: format,
             benchmark: { ...(BENCH[market]?.LinkedIn ?? {}), ...LI_FORMAT_BENCH_DEFAULTS[format] },
+            // A format switch replaces the benchmark with fresh generic
+            // defaults, so it's fair game for auto-suggest again even if
+            // this channel had already been AI-calibrated or hand-edited
+            // under the old format.
+            benchmarkSource: 'default',
           } : c)),
         })))),
       })),
@@ -347,7 +361,7 @@ export const useMediaPlanStore = create<MediaPlanState>()(
                 const factor = factors[f];
                 if (baseValue !== undefined && factor !== undefined) benchmark[f] = baseValue * factor;
               });
-              return { ...c, benchmark };
+              return { ...c, benchmark, benchmarkSource: 'manual' as const };
             }),
           })))),
         };

@@ -82,6 +82,14 @@ export interface ChannelConfig {
   // even if the plan's breakdown (Daily/Weekly/...) changes afterward.
   activeFrom?: string;
   activeTo?: string;
+  // Tracks where the current benchmark values came from, so the UI knows
+  // whether to auto-trigger an AI suggestion and what to tell the user.
+  // 'default' (or unset, for plans saved before this existed) means the
+  // channel still has the generic market-only numbers nobody has touched —
+  // that's the only state the auto-suggest effect is allowed to overwrite.
+  // 'manual' means the user explicitly set a value or applied a static
+  // preset, which must never be silently replaced.
+  benchmarkSource?: 'default' | 'ai' | 'manual';
 }
 
 // One goal's settings within a market — which channels are on, the

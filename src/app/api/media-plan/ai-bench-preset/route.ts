@@ -46,28 +46,37 @@ ${preset} means: ${PRESET_DESC[preset] ?? ''}.
 Base your answer on 2025-2026 European digital advertising benchmarks specific to this audience type and industry. Adjust for the market — Western EU (DE, UK, FR, NL) costs more than Eastern EU (PL, RO, BG). Use the set_benchmarks tool to return the values. All rate fields must be decimal proportions, NOT percentages.`;
 
   const client = new Anthropic({ apiKey });
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
-    tools: [toolDef],
-    tool_choice: { type: 'tool', name: 'set_benchmarks' },
-    messages: [{ role: 'user', content: prompt }],
-  });
+  try {
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      tools: [toolDef],
+      tool_choice: { type: 'tool', name: 'set_benchmarks' },
+      messages: [{ role: 'user', content: prompt }],
+    });
 
-  const toolUse = message.content.find((b) => b.type === 'tool_use');
-  if (!toolUse || toolUse.type !== 'tool_use') {
-    return NextResponse.json({ error: 'No benchmarks generated' }, { status: 502 });
+    const toolUse = message.content.find((b) => b.type === 'tool_use');
+    if (!toolUse || toolUse.type !== 'tool_use') {
+      return NextResponse.json({ error: 'No benchmarks generated' }, { status: 502 });
+    }
+
+    const input = toolUse.input as Record<string, number>;
+    const result: Record<string, number> = {};
+    fields.forEach((f: BenchmarkField) => {
+      if (!(f in input)) return;
+      const v = Number(input[f]);
+      if (f === 'frequency') result[f] = Math.round(v * 10) / 10;
+      else if (BENCH_IS_PCT.has(f)) result[f] = Math.round(v * 1000) / 1000;
+      else result[f] = Math.round(v * 100) / 100;
+    });
+
+    return NextResponse.json(result);
+  } catch (err) {
+    const errMessage = err instanceof Anthropic.APIError
+      ? `Anthropic API error (${err.status}): ${err.message}`
+      : err instanceof Error
+        ? err.message
+        : 'Unknown error calling Anthropic';
+    return NextResponse.json({ error: errMessage }, { status: 502 });
   }
-
-  const input = toolUse.input as Record<string, number>;
-  const result: Record<string, number> = {};
-  fields.forEach((f: BenchmarkField) => {
-    if (!(f in input)) return;
-    const v = Number(input[f]);
-    if (f === 'frequency') result[f] = Math.round(v * 10) / 10;
-    else if (BENCH_IS_PCT.has(f)) result[f] = Math.round(v * 1000) / 1000;
-    else result[f] = Math.round(v * 100) / 100;
-  });
-
-  return NextResponse.json(result);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BENCH_HELP, BENCH_IS_PCT, LI_VIDEO_HELP, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
 import { useMediaPlanStore } from '@/lib/mediaplan/store';
 import { useActualsStore } from '@/lib/mediaplan/actualsStore';
@@ -17,12 +17,17 @@ export function BenchmarkEditor({
   audience: string; industry: string;
 }) {
   const setField = useMediaPlanStore((s) => s.setChannelBenchmarkField);
+  const setAiBenchmark = useMediaPlanStore((s) => s.setChannelBenchmarkAi);
   const applyPreset = useMediaPlanStore((s) => s.applyBenchPreset);
   const clientName = useMediaPlanStore((s) => s.plan.clientName);
   const datasets = useActualsStore((s) => s.datasets);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [showSuggest, setShowSuggest] = useState(false);
+  // Guards the auto-suggest effect below against firing twice for the same
+  // channel instance (React StrictMode double-invokes effects in dev, and
+  // the benchmarkSource flip to 'ai' only lands after the fetch resolves).
+  const autoFiredRef = useRef(false);
 
   const suggestion = useMemo(() => {
     if (!clientName?.trim()) return null;
@@ -50,13 +55,25 @@ export function BenchmarkEditor({
       });
       if (!res.ok) throw new Error(await res.text());
       const values: Record<string, number> = await res.json();
-      Object.entries(values).forEach(([f, v]) => setField(scenarioId, market, goal, channelConfig.id, f, v));
+      setAiBenchmark(scenarioId, market, goal, channelConfig.id, values);
     } catch (e) {
       setAiError(e instanceof Error ? e.message : String(e));
     } finally {
       setAiLoading(false);
     }
   }
+
+  // Every channel starts on generic, country-only numbers (BENCH[market]).
+  // As soon as audience + industry + market are all known for a channel
+  // that hasn't been touched yet, calibrate it automatically instead of
+  // waiting for someone to notice and click "AI suggest" by hand.
+  useEffect(() => {
+    const isUntouched = !channelConfig.benchmarkSource || channelConfig.benchmarkSource === 'default';
+    if (!isUntouched || !market || !audience?.trim() || !industry?.trim() || autoFiredRef.current) return;
+    autoFiredRef.current = true;
+    applyAiPreset('Average');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelConfig.id, channelConfig.benchmarkSource, market, audience, industry]);
 
   return (
     <div className="rounded-md border border-ink-100 bg-ink-50 p-3">
@@ -94,6 +111,7 @@ export function BenchmarkEditor({
           </button>
         </div>
       </div>
+      {renderCalibrationStatus()}
       {showSuggest && renderSuggestPanel()}
       {aiError && <p className="mb-2 text-xs text-red-500">{aiError}</p>}
       {isLiVideo && (cpvMissing || vtrMissing) && (
@@ -114,6 +132,35 @@ export function BenchmarkEditor({
       )}
     </div>
   );
+
+  // Tells the person looking at these numbers where they came from, so
+  // "AI suggest" being automatic doesn't read as a black box: a generic
+  // market default looks identical to an audience/industry-calibrated one
+  // unless something says so.
+  function renderCalibrationStatus() {
+    if (aiLoading) {
+      return (
+        <p className="mb-2 rounded-md bg-mint-50 px-2 py-1 text-[11px] font-semibold text-mint-700">
+          Calibrating for {audience || 'this audience'} · {industry || 'this industry'} · {market}…
+        </p>
+      );
+    }
+    if (channelConfig.benchmarkSource === 'ai') {
+      return (
+        <p className="mb-2 rounded-md bg-mint-50 px-2 py-1 text-[11px] text-mint-700">
+          ✨ AI-calibrated for {audience} · {industry || 'no industry set'} · {market}. Edit any field to override, or re-run AI suggest after changing audience/industry.
+        </p>
+      );
+    }
+    if (!audience?.trim() || !industry?.trim()) {
+      return (
+        <p className="mb-2 rounded-md bg-ink-100 px-2 py-1 text-[11px] text-ink-500">
+          Showing generic {market} market defaults. Set audience and industry in the sidebar to auto-calibrate these benchmarks with AI.
+        </p>
+      );
+    }
+    return null;
+  }
 
   function renderSuggestPanel() {
     if (!clientName?.trim()) {
