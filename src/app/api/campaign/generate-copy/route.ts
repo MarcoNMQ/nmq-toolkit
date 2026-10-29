@@ -99,41 +99,50 @@ These limits apply equally in all languages. ${lang !== 'English' ? `${lang} wor
 
   let result: CopyResult | null = null;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1536,
-      tools: [TOOL_SCHEMA],
-      tool_choice: { type: 'tool', name: TOOL_NAME },
-      messages,
-    });
+  try {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const message = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1536,
+        tools: [TOOL_SCHEMA],
+        tool_choice: { type: 'tool', name: TOOL_NAME },
+        messages,
+      });
 
-    const toolUse = message.content.find((b) => b.type === 'tool_use');
-    if (!toolUse || toolUse.type !== 'tool_use') {
-      return NextResponse.json({ error: 'No copy generated' }, { status: 502 });
+      const toolUse = message.content.find((b) => b.type === 'tool_use');
+      if (!toolUse || toolUse.type !== 'tool_use') {
+        return NextResponse.json({ error: 'No copy generated' }, { status: 502 });
+      }
+
+      result = toolUse.input as CopyResult;
+      const problems = findOverLimit(result);
+      if (problems.length === 0) break;
+
+      if (attempt < MAX_RETRIES) {
+        // Feed the violation back and ask the model to fix just those —
+        // this is the "AI finds a solution" path, not a blind truncation.
+        messages.push(
+          { role: 'assistant', content: message.content },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: toolUse.id,
+                content: `These entries are over the character limit:\n${problems.join('\n')}\n\nRewrite ONLY these to fit within their limit by shortening the wording (don't just cut letters off the end — write a shorter complete sentence). Return the full corrected set of 15 headlines, 5 long headlines, and 5 descriptions again, with everything else unchanged.`,
+              },
+            ],
+          },
+        );
+      }
     }
-
-    result = toolUse.input as CopyResult;
-    const problems = findOverLimit(result);
-    if (problems.length === 0) break;
-
-    if (attempt < MAX_RETRIES) {
-      // Feed the violation back and ask the model to fix just those —
-      // this is the "AI finds a solution" path, not a blind truncation.
-      messages.push(
-        { role: 'assistant', content: message.content },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: toolUse.id,
-              content: `These entries are over the character limit:\n${problems.join('\n')}\n\nRewrite ONLY these to fit within their limit by shortening the wording (don't just cut letters off the end — write a shorter complete sentence). Return the full corrected set of 15 headlines, 5 long headlines, and 5 descriptions again, with everything else unchanged.`,
-            },
-          ],
-        },
-      );
-    }
+  } catch (err) {
+    const message = err instanceof Anthropic.APIError
+      ? `Anthropic API error (${err.status}): ${err.message}`
+      : err instanceof Error
+        ? err.message
+        : 'Unknown error calling Anthropic';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   if (!result) {

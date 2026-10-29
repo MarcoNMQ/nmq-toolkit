@@ -151,15 +151,18 @@ export function GoogleAdForm({ campaignId, adId }: { campaignId: string; adId: s
               language: lang,
             }),
           });
-          if (!res.ok) throw new Error(await res.text());
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.error || `Copy generation failed (${res.status})`);
+          }
           return { lang, data: (await res.json()) as CopyResult };
         }),
       );
       const map: Record<string, CopyResult> = {};
       for (const { lang, data } of results) map[lang] = data;
       setLangResults(map);
-    } catch {
-      setError('Copy generation failed — check the Anthropic API key is set.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Copy generation failed.');
     } finally {
       setGenerating(false);
     }
