@@ -1,39 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
+import { CoruscantError, coruscantChat, firstToolCallArgs, type CoruscantMessage } from '@/lib/coruscant';
 
 const TOOL_NAME = 'submit_ad_copy';
 const MAX_RETRIES = 2;
 
-const TOOL_SCHEMA = {
-  name: TOOL_NAME,
-  description: 'Submit generated Google Demand Gen ad copy.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      headlines: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        minItems: 15,
-        maxItems: 15,
-        description: 'STRICT HARD LIMIT: 30 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
+const TOOL_DEF = {
+  type: 'function' as const,
+  function: {
+    name: TOOL_NAME,
+    description: 'Submit generated Google Demand Gen ad copy.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        headlines: {
+          type: 'array' as const,
+          items: { type: 'string' as const },
+          minItems: 15,
+          maxItems: 15,
+          description: 'STRICT HARD LIMIT: 30 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
+        },
+        longHeadlines: {
+          type: 'array' as const,
+          items: { type: 'string' as const },
+          minItems: 5,
+          maxItems: 5,
+          description: 'STRICT HARD LIMIT: 90 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
+        },
+        descriptions: {
+          type: 'array' as const,
+          items: { type: 'string' as const },
+          minItems: 5,
+          maxItems: 5,
+          description: 'STRICT HARD LIMIT: 90 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
+        },
       },
-      longHeadlines: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        minItems: 5,
-        maxItems: 5,
-        description: 'STRICT HARD LIMIT: 90 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
-      },
-      descriptions: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        minItems: 5,
-        maxItems: 5,
-        description: 'STRICT HARD LIMIT: 90 characters or fewer per string, counting every letter, space and punctuation mark. Count each one before submitting.',
-      },
+      required: ['headlines', 'longHeadlines', 'descriptions'],
     },
-    required: ['headlines', 'longHeadlines', 'descriptions'],
   },
 };
 
@@ -68,16 +70,10 @@ function findOverLimit(result: CopyResult): string[] {
 }
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
-  }
-
   const { videoTitle, productCategory, productPromoted, language } = await req.json();
-  const client = new Anthropic({ apiKey });
   const lang: string = language || 'English';
 
-  const messages: MessageParam[] = [
+  const messages: CoruscantMessage[] = [
     {
       role: 'user',
       content: `Write Google Demand Gen video ad copy.
@@ -101,20 +97,19 @@ These limits apply equally in all languages. ${lang !== 'English' ? `${lang} wor
 
   try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const message = await client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1536,
-        tools: [TOOL_SCHEMA],
-        tool_choice: { type: 'tool', name: TOOL_NAME },
+      const { message } = await coruscantChat({
+        maxTokens: 1536,
+        tools: [TOOL_DEF],
+        toolChoice: { type: 'function', function: { name: TOOL_NAME } },
         messages,
       });
 
-      const toolUse = message.content.find((b) => b.type === 'tool_use');
-      if (!toolUse || toolUse.type !== 'tool_use') {
+      const toolCall = message.tool_calls?.[0];
+      if (!toolCall) {
         return NextResponse.json({ error: 'No copy generated' }, { status: 502 });
       }
 
-      result = toolUse.input as CopyResult;
+      result = firstToolCallArgs<CopyResult>(message, TOOL_NAME);
       const problems = findOverLimit(result);
       if (problems.length === 0) break;
 
@@ -122,26 +117,21 @@ These limits apply equally in all languages. ${lang !== 'English' ? `${lang} wor
         // Feed the violation back and ask the model to fix just those —
         // this is the "AI finds a solution" path, not a blind truncation.
         messages.push(
-          { role: 'assistant', content: message.content },
+          { role: 'assistant', content: message.content ?? null, tool_calls: message.tool_calls },
           {
-            role: 'user',
-            content: [
-              {
-                type: 'tool_result',
-                tool_use_id: toolUse.id,
-                content: `These entries are over the character limit:\n${problems.join('\n')}\n\nRewrite ONLY these to fit within their limit by shortening the wording (don't just cut letters off the end — write a shorter complete sentence). Return the full corrected set of 15 headlines, 5 long headlines, and 5 descriptions again, with everything else unchanged.`,
-              },
-            ],
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: `These entries are over the character limit:\n${problems.join('\n')}\n\nRewrite ONLY these to fit within their limit by shortening the wording (don't just cut letters off the end — write a shorter complete sentence). Return the full corrected set of 15 headlines, 5 long headlines, and 5 descriptions again, with everything else unchanged.`,
           },
         );
       }
     }
   } catch (err) {
-    const message = err instanceof Anthropic.APIError
-      ? `Anthropic API error (${err.status}): ${err.message}`
+    const message = err instanceof CoruscantError
+      ? err.message
       : err instanceof Error
         ? err.message
-        : 'Unknown error calling Anthropic';
+        : 'Unknown error calling the Coruscant gateway';
     return NextResponse.json({ error: message }, { status: 502 });
   }
 

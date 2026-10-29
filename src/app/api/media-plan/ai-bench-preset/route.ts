@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { CoruscantError, coruscantChat, firstToolCallArgs } from '@/lib/coruscant';
 import { BENCH_FIELD_DESC, BENCH_IS_PCT, MARKET_LABELS, PRESET_DESC, benchFieldsFor, channelKeyFor } from '@/lib/mediaplan/constants';
 import type { AmazonFormat, BenchmarkField, Channel, Goal, LinkedInFormat } from '@/lib/mediaplan/types';
 
-// Direct port of _apply_bench_preset_ai() in media_plan.py — asks Claude
+const TOOL_NAME = 'set_benchmarks';
+
+// Direct port of _apply_bench_preset_ai() in media_plan.py — asks the model
 // for audience/industry-calibrated benchmarks instead of the flat preset
 // multipliers, since "Conservative for a B2B fintech in DE" and
 // "Conservative for B2C retail in RO" should not use the same numbers.
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY is not configured' }, { status: 500 });
-  }
-
   const { market, channel, goal, liFormat, amazonFormat, preset, audience, industry } = await req.json() as {
     market: string; channel: Channel; goal: Goal; liFormat?: LinkedInFormat; amazonFormat?: AmazonFormat; preset: string; audience: string; industry: string;
   };
@@ -28,9 +25,12 @@ export async function POST(req: NextRequest) {
     : channel;
 
   const toolDef = {
-    name: 'set_benchmarks',
-    description: 'Return calibrated benchmark values for the specified channel/goal/audience/industry combination.',
-    input_schema: { type: 'object' as const, properties, required: fields },
+    type: 'function' as const,
+    function: {
+      name: TOOL_NAME,
+      description: 'Return calibrated benchmark values for the specified channel/goal/audience/industry combination.',
+      parameters: { type: 'object' as const, properties, required: fields },
+    },
   };
 
   const prompt = `You are a digital advertising benchmark expert specialising in European paid media.
@@ -45,22 +45,15 @@ ${preset} means: ${PRESET_DESC[preset] ?? ''}.
 
 Base your answer on 2025-2026 European digital advertising benchmarks specific to this audience type and industry. Adjust for the market — Western EU (DE, UK, FR, NL) costs more than Eastern EU (PL, RO, BG). Use the set_benchmarks tool to return the values. All rate fields must be decimal proportions, NOT percentages.`;
 
-  const client = new Anthropic({ apiKey });
   try {
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
+    const { message } = await coruscantChat({
+      maxTokens: 256,
       tools: [toolDef],
-      tool_choice: { type: 'tool', name: 'set_benchmarks' },
+      toolChoice: { type: 'function', function: { name: TOOL_NAME } },
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const toolUse = message.content.find((b) => b.type === 'tool_use');
-    if (!toolUse || toolUse.type !== 'tool_use') {
-      return NextResponse.json({ error: 'No benchmarks generated' }, { status: 502 });
-    }
-
-    const input = toolUse.input as Record<string, number>;
+    const input = firstToolCallArgs<Record<string, number>>(message, TOOL_NAME);
     const result: Record<string, number> = {};
     fields.forEach((f: BenchmarkField) => {
       if (!(f in input)) return;
@@ -72,11 +65,11 @@ Base your answer on 2025-2026 European digital advertising benchmarks specific t
 
     return NextResponse.json(result);
   } catch (err) {
-    const errMessage = err instanceof Anthropic.APIError
-      ? `Anthropic API error (${err.status}): ${err.message}`
+    const errMessage = err instanceof CoruscantError
+      ? err.message
       : err instanceof Error
         ? err.message
-        : 'Unknown error calling Anthropic';
+        : 'Unknown error calling the Coruscant gateway';
     return NextResponse.json({ error: errMessage }, { status: 502 });
   }
 }
