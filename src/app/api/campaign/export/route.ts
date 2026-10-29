@@ -25,7 +25,7 @@ import type { PmaxCampaign } from '@/lib/campaign/pmax/pmaxTypes';
 const KNOWN_GOOGLE_CHANNELS = new Set(['Search', 'YouTube']);
 
 export async function POST(req: NextRequest) {
-  const { platform, campaigns, exportType } = await req.json();
+  const { platform, campaigns, exportType, facebookPageId } = await req.json();
 
   if (platform === 'google') {
     if (exportType === 'keywords') {
@@ -121,14 +121,14 @@ export async function POST(req: NextRequest) {
     // destination URL, no image, no ad copy, missing objective/countries)
     // could still be exported — the same class of silently-broken-export
     // bug the Search audit fixed.
-    const fieldErrors = validateFbCampaigns(campaigns as FbCampaign[]);
+    const fieldErrors = validateFbCampaigns(campaigns as FbCampaign[], facebookPageId);
     if (fieldErrors.length > 0) {
       return new NextResponse(fieldErrors.join('\n'), { status: 422 });
     }
     const isAdsOnly = exportType === 'fb_ads_only';
     const buffer = isAdsOnly
-      ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[])
-      : await buildFbExcel(campaigns as FbCampaign[]);
+      ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[], facebookPageId)
+      : await buildFbExcel(campaigns as FbCampaign[], facebookPageId);
     const filename = isAdsOnly ? 'facebook_ads_only.xlsx' : 'facebook_campaigns.xlsx';
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

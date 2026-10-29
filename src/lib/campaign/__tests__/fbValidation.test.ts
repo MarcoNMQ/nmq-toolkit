@@ -43,8 +43,8 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
 }
 
 describe('validateFbCampaigns — required fields', () => {
-  it('passes a fully filled-in campaign with no errors', () => {
-    expect(validateFbCampaigns([makeCard()])).toEqual([]);
+  it('passes a fully filled-in campaign with no errors, given a Page ID', () => {
+    expect(validateFbCampaigns([makeCard()], '123456789012345')).toEqual([]);
   });
 
   it('reports no campaigns at all', () => {
@@ -127,6 +127,42 @@ describe('validateFbCampaigns — per-ad checks', () => {
       ad_type: 'existing_post', story_id: 's:123456', link: '', body: '', image_hash: '', image_file_name: '', title: '',
     })]);
     expect(errors).toEqual([]);
+  });
+});
+
+describe('validateFbCampaigns — Facebook Page ID (Link Object ID)', () => {
+  it('blocks export when no Page ID is set and a new-creative ad exists', () => {
+    const errors = validateFbCampaigns([makeCard()]);
+    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(true);
+  });
+
+  it('does not block once a Page ID is provided', () => {
+    const errors = validateFbCampaigns([makeCard()], '123456789012345');
+    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(false);
+  });
+
+  it('does not require a Page ID when every ad promotes an existing post', () => {
+    const base = makeCard();
+    const card = {
+      ...base,
+      ads: [{
+        ...base.ads[0], ad_type: 'existing_post' as const, story_id: 's:123',
+        link: '', body: '', image_hash: '', image_file_name: '', title: '',
+      }],
+    };
+    const errors = validateFbCampaigns([card]);
+    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(false);
+  });
+
+  it('still requires a Page ID if at least one ad in the set is a new creative, even if others are existing-post', () => {
+    const base = makeCard();
+    const existingPostAd = {
+      ...base.ads[0], id: 'ad2', ad_name: 'Ad 2', ad_type: 'existing_post' as const, story_id: 's:123',
+      link: '', body: 'x', image_hash: '', image_file_name: '', title: '',
+    };
+    const card = { ...base, ads: [base.ads[0], existingPostAd] };
+    const errors = validateFbCampaigns([card]);
+    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(true);
   });
 });
 

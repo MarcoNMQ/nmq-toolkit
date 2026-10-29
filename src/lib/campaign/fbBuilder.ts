@@ -35,7 +35,7 @@ function toIso(codes: string[]): string {
 }
 
 /** Build the Facebook Ads Manager .xlsx file, one row per ad. */
-export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
+export async function buildFbExcel(campaigns: FbCampaign[], facebookPageId = ''): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
@@ -47,6 +47,12 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
 
       // Campaign level — always from the campaign's owner card
       row['Campaign Name'] = name;
+      // Every ad needs a Link Object ID so Meta knows which Page is
+      // running it — a story/existing-post ad already runs from a real
+      // post on the Page, so it doesn't need this.
+      if (facebookPageId && ad.ad_type !== 'existing_post') {
+        row['Link Object ID'] = `o:${facebookPageId}`;
+      }
       row['Campaign Status'] = owner.campaign_status || 'PAUSED';
       row['Special Ad Categories'] = 'none';
       row['Campaign Objective'] = owner.campaign_objective ?? '';
@@ -134,7 +140,7 @@ export async function buildFbExcel(campaigns: FbCampaign[]): Promise<Buffer> {
  * Facebook then attaches the new ads to existing campaigns/ad sets by name
  * instead of creating duplicate campaign structures.
  */
-export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buffer> {
+export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], facebookPageId = ''): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
@@ -145,7 +151,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
     'Ad ID', 'Ad Status', 'Ad Name', 'Title', 'Body', 'Link Description',
     'Display Link', 'Image Hash', 'Creative Type', 'URL Tags', 'Image File Name',
     'Call to Action', 'Story ID', 'Video ID', 'Link', 'URL Tags',
-    'Creative Optimization',
+    'Creative Optimization', 'Link Object ID',
     'Product 1 - Link', 'Product 1 - Name', 'Product 1 - Description', 'Product 1 - Image Hash',
     'Product 2 - Link', 'Product 2 - Name', 'Product 2 - Description', 'Product 2 - Image Hash',
     'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
@@ -161,6 +167,9 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
       row['Link'] = ad.link ?? '';
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
+      if (facebookPageId && ad.ad_type !== 'existing_post') {
+        row['Link Object ID'] = `o:${facebookPageId}`;
+      }
 
       if (ad.ad_type === 'existing_post') {
         row['Story ID'] = ad.story_id ?? '';
@@ -189,11 +198,20 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[]): Promise<Buff
   return Buffer.from(arrayBuffer);
 }
 
-export function validateFbCampaigns(campaigns: FbCampaign[]): string[] {
+export function validateFbCampaigns(campaigns: FbCampaign[], facebookPageId = ''): string[] {
   const errors: string[] = [];
   if (!campaigns || campaigns.length === 0) {
     errors.push('Add at least one campaign before exporting.');
     return errors;
+  }
+
+  // Every ad that isn't promoting an existing post needs a Link Object ID
+  // (`o:<Page ID>`) so Meta knows which Page is running it — this is a
+  // single workspace-level setting (see the Facebook Page ID field in the
+  // sidebar), so one missing-setting error covers every affected ad rather
+  // than repeating it per ad.
+  if (!facebookPageId && campaigns.some((c) => (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post'))) {
+    errors.push('Set a Facebook Page ID in the sidebar before exporting — Meta requires it on every new ad.');
   }
 
   campaigns.forEach((c, i) => {

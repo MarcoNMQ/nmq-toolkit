@@ -182,6 +182,15 @@ interface BuilderState {
   platform: Platform;
   setPlatform: (p: Platform) => void;
 
+  /** The Facebook Page every Facebook ad is attributed to (Meta's bulk
+   *  upload requires a "Link Object ID" — `o:<Page ID>` — on every ad row).
+   *  A single workspace-level setting rather than a per-campaign field,
+   *  since this tool is used one client at a time and that client's
+   *  campaigns all run from the same Page. Auto-applied at export time in
+   *  fbBuilder.ts — nothing needs to be typed per campaign or per ad. */
+  facebookPageId: string;
+  setFacebookPageId: (id: string) => void;
+
   googleCampaigns: GoogleCampaign[];
   fbCampaigns: FbCampaign[];
   /** Performance Max campaigns — a parallel collection, never bolted onto
@@ -281,6 +290,9 @@ export const useBuilderStore = create<BuilderState>()(
       const c = newFbCampaign();
       return { platform: p, fbCampaigns: [...state.fbCampaigns, c], selected: { type: 'campaign', campaignId: c.id }, mobileSidebarOpen: false };
     }),
+
+  facebookPageId: '',
+  setFacebookPageId: (id) => set({ facebookPageId: id }),
 
   googleCampaigns: [],
   fbCampaigns: [],
@@ -696,6 +708,7 @@ export const useBuilderStore = create<BuilderState>()(
       // open/closed state — that should always start closed on load.
       partialize: (state) => ({
         platform: state.platform,
+        facebookPageId: state.facebookPageId,
         googleCampaigns: state.googleCampaigns,
         fbCampaigns: state.fbCampaigns,
         pmaxCampaigns: state.pmaxCampaigns,
