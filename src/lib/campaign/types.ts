@@ -153,10 +153,14 @@ export interface FbCampaign {
   id: string;
   // Which client this campaign belongs to — matches a name in useClientsStore
   // (src/lib/clients/store.ts), the same shared client roster GoogleCampaign
-  // uses. Resolves the client's Facebook Page ID automatically at export
-  // time (see fbBuilder.ts) — Shimano, for example, runs from its own Page,
-  // distinct from any other client's.
+  // uses.
   client_profile: string;
+  // Which of that client's Facebook Pages this campaign runs from — matches
+  // a ClientEntry.facebookPages[].id. A client can run dozens of Pages (one
+  // per brand line × market — Shimano alone has ~30), so picking the client
+  // alone isn't enough to resolve a Link Object ID; this picks the exact
+  // Page. Resolved automatically at export time (see fbBuilder.ts).
+  facebook_page_ref: string;
   campaign_name: string;
   campaign_status: string;
   campaign_objective: string;

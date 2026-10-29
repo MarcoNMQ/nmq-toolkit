@@ -22,15 +22,22 @@ describe('migrateBuilderState', () => {
     expect(migrated.googleCampaigns).toEqual(googleCampaigns);
   });
 
-  it('preserves existing Facebook campaign data, backfilling client_profile for pre-client-profile data', () => {
+  it('preserves existing Facebook campaign data, backfilling client_profile and facebook_page_ref for pre-existing data', () => {
     const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test' }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
-    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: '' }]);
+    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: '', facebook_page_ref: '' }]);
   });
 
-  it('leaves an already-set client_profile untouched', () => {
+  it('backfills only facebook_page_ref when client_profile was already set from an earlier migration pass', () => {
     const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano' }];
+    const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
+    const migrated = migrateBuilderState(legacy);
+    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: '' }]);
+  });
+
+  it('leaves already-set client_profile and facebook_page_ref untouched', () => {
+    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: 'page1' }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
     expect(migrated.fbCampaigns).toEqual(fbCampaigns);

@@ -11,6 +11,7 @@ import type { FbCampaign } from './types';
 /** Fields that live on the Meta campaign itself, shared by all its ad sets. */
 export const FB_CAMPAIGN_LEVEL_FIELDS = [
   'client_profile',
+  'facebook_page_ref',
   'campaign_status',
   'campaign_objective',
   'buying_type',
@@ -26,6 +27,7 @@ export type FbCampaignLevelField = (typeof FB_CAMPAIGN_LEVEL_FIELDS)[number];
 
 const FIELD_LABELS: Record<FbCampaignLevelField, string> = {
   client_profile: 'Client',
+  facebook_page_ref: 'Facebook Page',
   campaign_status: 'Campaign status',
   campaign_objective: 'Campaign objective',
   buying_type: 'Buying type',

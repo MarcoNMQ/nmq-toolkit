@@ -9,6 +9,7 @@ import { validatePmaxBundles } from '@/lib/campaign/pmax/pmaxValidation';
 import { buildPmaxPackageWorkbook } from '@/lib/campaign/pmax/pmaxPackageBuilder';
 import type { FbCampaign, GoogleCampaign } from '@/lib/campaign/types';
 import type { PmaxCampaign } from '@/lib/campaign/pmax/pmaxTypes';
+import type { ClientEntry } from '@/lib/clients/store';
 
 /**
  * Channels this route knows how to serialize under `platform: "google"`.
@@ -25,8 +26,8 @@ import type { PmaxCampaign } from '@/lib/campaign/pmax/pmaxTypes';
 const KNOWN_GOOGLE_CHANNELS = new Set(['Search', 'YouTube']);
 
 export async function POST(req: NextRequest) {
-  const { platform, campaigns, exportType, clientPageIds: rawClientPageIds } = await req.json();
-  const clientPageIds: Record<string, string> = rawClientPageIds ?? {};
+  const { platform, campaigns, exportType, clients: rawClients } = await req.json();
+  const clients: ClientEntry[] = rawClients ?? [];
 
   if (platform === 'google') {
     if (exportType === 'keywords') {
@@ -122,14 +123,14 @@ export async function POST(req: NextRequest) {
     // destination URL, no image, no ad copy, missing objective/countries)
     // could still be exported — the same class of silently-broken-export
     // bug the Search audit fixed.
-    const fieldErrors = validateFbCampaigns(campaigns as FbCampaign[], clientPageIds);
+    const fieldErrors = validateFbCampaigns(campaigns as FbCampaign[], clients);
     if (fieldErrors.length > 0) {
       return new NextResponse(fieldErrors.join('\n'), { status: 422 });
     }
     const isAdsOnly = exportType === 'fb_ads_only';
     const buffer = isAdsOnly
-      ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[], clientPageIds)
-      : await buildFbExcel(campaigns as FbCampaign[], clientPageIds);
+      ? await buildFbAdsOnlyExcel(campaigns as FbCampaign[], clients)
+      : await buildFbExcel(campaigns as FbCampaign[], clients);
     const filename = isAdsOnly ? 'facebook_ads_only.xlsx' : 'facebook_campaigns.xlsx';
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

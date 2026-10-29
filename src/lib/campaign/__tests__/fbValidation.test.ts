@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { validateFbCampaigns } from '../fbBuilder';
 import type { FbCampaign } from '../types';
+import type { ClientEntry } from '@/lib/clients/store';
 
 function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: Math.random().toString(36),
     client_profile: 'Shimano',
+    facebook_page_ref: 'page1',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -43,9 +45,19 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   };
 }
 
+/** A client roster where Shimano has one Page ("page1" → a real Page ID) —
+ *  mirrors the real shape, where a client can run many Pages and a campaign
+ *  picks exactly one by its ref. */
+function makeClients(): ClientEntry[] {
+  return [
+    { id: 'c1', name: 'Shimano', facebookPages: [{ id: 'page1', name: 'Shimano Fishing FR', pageId: '123456789012345' }] },
+    { id: 'c2', name: 'Lineage', facebookPages: [{ id: 'pageL', name: 'Lineage Main', pageId: '999999999999999' }] },
+  ];
+}
+
 describe('validateFbCampaigns — required fields', () => {
-  it('passes a fully filled-in campaign with no errors, given its client has a Page ID', () => {
-    expect(validateFbCampaigns([makeCard()], { Shimano: '123456789012345' })).toEqual([]);
+  it('passes a fully filled-in campaign with no errors, given its Page resolves to a real Page ID', () => {
+    expect(validateFbCampaigns([makeCard()], makeClients())).toEqual([]);
   });
 
   it('reports no campaigns at all', () => {
@@ -60,17 +72,17 @@ describe('validateFbCampaigns — required fields', () => {
     ['optimization_goal', '', /Optimization Goal/],
     ['billing_event', '', /Billing Event/],
   ] as const)('flags a blank %s', (field, value, pattern) => {
-    const errors = validateFbCampaigns([makeCard({ [field]: value } as Partial<FbCampaign>)]);
+    const errors = validateFbCampaigns([makeCard({ [field]: value } as Partial<FbCampaign>)], makeClients());
     expect(errors.some((e) => pattern.test(e))).toBe(true);
   });
 
   it('flags no countries selected', () => {
-    const errors = validateFbCampaigns([makeCard({ countries: [] })]);
+    const errors = validateFbCampaigns([makeCard({ countries: [] })], makeClients());
     expect(errors.some((e) => /at least one country/.test(e))).toBe(true);
   });
 
   it('flags a campaign with zero ads', () => {
-    const errors = validateFbCampaigns([makeCard({ ads: [] })]);
+    const errors = validateFbCampaigns([makeCard({ ads: [] })], makeClients());
     expect(errors.some((e) => /Add at least one ad/.test(e))).toBe(true);
   });
 });
@@ -82,78 +94,88 @@ describe('validateFbCampaigns — per-ad checks', () => {
   }
 
   it('flags a blank ad name', () => {
-    const errors = validateFbCampaigns([withAd({ ad_name: '' })]);
+    const errors = validateFbCampaigns([withAd({ ad_name: '' })], makeClients());
     expect(errors.some((e) => /Ad Name is required/.test(e))).toBe(true);
   });
 
   it('flags a missing destination link', () => {
-    const errors = validateFbCampaigns([withAd({ link: '' })]);
+    const errors = validateFbCampaigns([withAd({ link: '' })], makeClients());
     expect(errors.some((e) => /Destination URL is required/.test(e))).toBe(true);
   });
 
   it('flags a missing body', () => {
-    const errors = validateFbCampaigns([withAd({ body: '' })]);
+    const errors = validateFbCampaigns([withAd({ body: '' })], makeClients());
     expect(errors.some((e) => /Body \(primary text\) is required/.test(e))).toBe(true);
   });
 
   it('flags neither image hash nor image file name set', () => {
-    const errors = validateFbCampaigns([withAd({ image_hash: '', image_file_name: '' })]);
+    const errors = validateFbCampaigns([withAd({ image_hash: '', image_file_name: '' })], makeClients());
     expect(errors.some((e) => /Image Hash.*Image File Name/.test(e))).toBe(true);
   });
 
   it('flags BOTH image hash and image file name set — Meta rejects rows with both', () => {
-    const errors = validateFbCampaigns([withAd({ image_hash: 'abc:123', image_file_name: 'photo.jpg' })]);
+    const errors = validateFbCampaigns([withAd({ image_hash: 'abc:123', image_file_name: 'photo.jpg' })], makeClients());
     expect(errors.some((e) => /only one of Image Hash or Image File Name/.test(e))).toBe(true);
   });
 
   it('flags a title over the 25-character limit', () => {
-    const errors = validateFbCampaigns([withAd({ title: 'This headline is way too long for Meta' })]);
+    const errors = validateFbCampaigns([withAd({ title: 'This headline is way too long for Meta' })], makeClients());
     expect(errors.some((e) => /Title is \d+ chars \(max 25\)/.test(e))).toBe(true);
   });
 
   it('flags a body over the 500-character limit', () => {
-    const errors = validateFbCampaigns([withAd({ body: 'x'.repeat(501) })]);
+    const errors = validateFbCampaigns([withAd({ body: 'x'.repeat(501) })], makeClients());
     expect(errors.some((e) => /Body is \d+ chars \(max 500\)/.test(e))).toBe(true);
   });
 
   it('does not require link/image/body/title-limit for an existing-post ad, only a Story ID', () => {
     const errors = validateFbCampaigns([withAd({
       ad_type: 'existing_post', story_id: '', link: '', body: '', image_hash: '', image_file_name: '', title: '',
-    })]);
+    })], makeClients());
     expect(errors).toEqual(['Campaign 1 (My Campaign) › Ad 1 (Ad 1): Story ID is required when promoting an existing post.']);
   });
 
   it('passes an existing-post ad once Story ID is set, even with no link/image/body', () => {
     const errors = validateFbCampaigns([withAd({
       ad_type: 'existing_post', story_id: 's:123456', link: '', body: '', image_hash: '', image_file_name: '', title: '',
-    })]);
+    })], makeClients());
     expect(errors).toEqual([]);
   });
 });
 
-describe('validateFbCampaigns — client/Page ID resolution (Link Object ID)', () => {
+describe('validateFbCampaigns — client/Facebook Page resolution (Link Object ID)', () => {
   it('blocks export when no client is picked at all', () => {
-    const errors = validateFbCampaigns([makeCard({ client_profile: '' })]);
+    const errors = validateFbCampaigns([makeCard({ client_profile: '', facebook_page_ref: '' })]);
     expect(errors.some((e) => /Pick a client/.test(e))).toBe(true);
   });
 
-  it("blocks export when a client is picked but that client has no Page ID set", () => {
-    const errors = validateFbCampaigns([makeCard()], {});
-    expect(errors.some((e) => /"Shimano" has no Facebook Page ID set/.test(e))).toBe(true);
+  it('blocks export when a client is picked but has no Pages added yet', () => {
+    const errors = validateFbCampaigns([makeCard()], [{ id: 'c1', name: 'Shimano' }]);
+    expect(errors.some((e) => /"Shimano" has no Facebook Pages added yet/.test(e))).toBe(true);
   });
 
-  it('does not block once the selected client has a Page ID set', () => {
-    const errors = validateFbCampaigns([makeCard()], { Shimano: '123456789012345' });
-    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(false);
+  it('blocks export when a client has Pages but none is picked for this campaign', () => {
+    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: '' })], makeClients());
+    expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 
-  it('only resolves the Page ID for the matching client — an unrelated client\'s Page ID does not count', () => {
-    const errors = validateFbCampaigns([makeCard()], { Lineage: '999999999999999' });
-    expect(errors.some((e) => /"Shimano" has no Facebook Page ID set/.test(e))).toBe(true);
+  it('blocks export when the picked facebook_page_ref no longer matches any of the client\'s Pages', () => {
+    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: 'deleted-page' })], makeClients());
+    expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 
-  it('does not require a Page ID when every ad promotes an existing post, even with no client Page ID set', () => {
-    const base = makeCard();
+  it('does not block once a real Page is resolved', () => {
+    const errors = validateFbCampaigns([makeCard()], makeClients());
+    expect(errors.some((e) => /Facebook Page/.test(e))).toBe(false);
+  });
+
+  it("only resolves a Page from the matching client — another client's Page ref does not count", () => {
+    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: 'pageL' })], makeClients());
+    expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
+  });
+
+  it('does not require a Page when every ad promotes an existing post, even with no client/Page set', () => {
+    const base = makeCard({ client_profile: '', facebook_page_ref: '' });
     const card = {
       ...base,
       ads: [{
@@ -162,18 +184,18 @@ describe('validateFbCampaigns — client/Page ID resolution (Link Object ID)', (
       }],
     };
     const errors = validateFbCampaigns([card]);
-    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(false);
+    expect(errors.some((e) => /Facebook Page|Pick a client/.test(e))).toBe(false);
   });
 
-  it('still requires a Page ID if at least one ad in the set is a new creative, even if others are existing-post', () => {
-    const base = makeCard();
+  it('still requires a Page if at least one ad in the set is a new creative, even if others are existing-post', () => {
+    const base = makeCard({ facebook_page_ref: '' });
     const existingPostAd = {
       ...base.ads[0], id: 'ad2', ad_name: 'Ad 2', ad_type: 'existing_post' as const, story_id: 's:123',
       link: '', body: 'x', image_hash: '', image_file_name: '', title: '',
     };
     const card = { ...base, ads: [base.ads[0], existingPostAd] };
-    const errors = validateFbCampaigns([card]);
-    expect(errors.some((e) => /Facebook Page ID/.test(e))).toBe(true);
+    const errors = validateFbCampaigns([card], makeClients());
+    expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 });
 
@@ -181,7 +203,7 @@ describe('validateFbCampaigns — includes grouping conflicts', () => {
   it('surfaces a grouping conflict (shared ad set name, disagreeing countries) alongside field errors', () => {
     const a = makeCard({ adset_name: 'Shared', countries: ['DE'] });
     const b = makeCard({ adset_name: 'Shared', countries: ['FR'], ads: [{ ...a.ads[0], id: 'ad2', ad_name: 'Ad 2' }] });
-    const errors = validateFbCampaigns([a, b]);
+    const errors = validateFbCampaigns([a, b], makeClients());
     expect(errors.some((e) => /Countries/.test(e) && /Shared/.test(e))).toBe(true);
   });
 });

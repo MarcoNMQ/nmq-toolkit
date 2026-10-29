@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import { FB_HEADERS, FB_COUNTRY_ISO } from './fbConstants';
 import { groupFbCampaigns, fbGroupingErrors } from './fbGrouping';
 import type { FbCampaign } from './types';
+import type { ClientEntry } from '@/lib/clients/store';
 
 /** Convert a YYYY-MM-DD string to MM/DD/YY HH:MM for Facebook. */
 function fmtFbDate(dt: string | undefined | null): string {
@@ -34,24 +35,24 @@ function toIso(codes: string[]): string {
   return codes.map((c) => FB_COUNTRY_ISO[c] ?? c).join(',');
 }
 
-/** `clientPageIds` maps a client name (FbCampaign.client_profile, matching
- *  useClientsStore's ClientEntry.name) to that client's Facebook Page ID —
- *  each client can run from its own Page, so this is resolved per campaign
- *  rather than a single value for the whole export. */
-export type ClientPageIds = Record<string, string>;
-
-function resolvePageId(owner: FbCampaign, clientPageIds: ClientPageIds): string {
-  return clientPageIds[owner.client_profile] ?? '';
+/** Resolves client_profile + facebook_page_ref to an actual numeric Facebook
+ *  Page ID, by looking the campaign's client up in the shared client roster
+ *  and then that client's chosen Page by its stable ref id. A client can run
+ *  dozens of Pages (one per brand line × market), so both the client AND the
+ *  specific Page it picked are needed — the client alone isn't enough. */
+function resolvePageId(owner: FbCampaign, clients: ClientEntry[]): string {
+  const client = clients.find((c) => c.name === owner.client_profile);
+  return client?.facebookPages?.find((p) => p.id === owner.facebook_page_ref)?.pageId ?? '';
 }
 
 /** Build the Facebook Ads Manager .xlsx file, one row per ad. */
-export async function buildFbExcel(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): Promise<Buffer> {
+export async function buildFbExcel(campaigns: FbCampaign[], clients: ClientEntry[] = []): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
 
   for (const { card: camp, owner, name } of exportOrder(campaigns)) {
-    const pageId = resolvePageId(owner, clientPageIds);
+    const pageId = resolvePageId(owner, clients);
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
@@ -151,7 +152,7 @@ export async function buildFbExcel(campaigns: FbCampaign[], clientPageIds: Clien
  * Facebook then attaches the new ads to existing campaigns/ad sets by name
  * instead of creating duplicate campaign structures.
  */
-export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): Promise<Buffer> {
+export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clients: ClientEntry[] = []): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ads Manager Template');
   ws.addRow(FB_HEADERS);
@@ -169,7 +170,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clientPageIds
   ]);
 
   for (const { card: camp, owner, name } of exportOrder(campaigns)) {
-    const pageId = resolvePageId(owner, clientPageIds);
+    const pageId = resolvePageId(owner, clients);
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
@@ -210,7 +211,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clientPageIds
   return Buffer.from(arrayBuffer);
 }
 
-export function validateFbCampaigns(campaigns: FbCampaign[], clientPageIds: ClientPageIds = {}): string[] {
+export function validateFbCampaigns(campaigns: FbCampaign[], clients: ClientEntry[] = []): string[] {
   const errors: string[] = [];
   if (!campaigns || campaigns.length === 0) {
     errors.push('Add at least one campaign before exporting.');
@@ -219,13 +220,14 @@ export function validateFbCampaigns(campaigns: FbCampaign[], clientPageIds: Clie
 
   campaigns.forEach((c, i) => {
     const label = `Campaign ${i + 1} (${c.campaign_name || '—'})`;
-    if (!c.client_profile) errors.push(`${label}: Pick a client — Meta requires knowing which Facebook Page runs this campaign.`);
-    // Every ad that isn't promoting an existing post needs a Link Object ID
-    // (`o:<Page ID>`), resolved from the campaign's client. A client with no
-    // Page ID set is a separate, more specific error than "no client picked"
-    // at all, so it's only checked once a client IS selected.
-    else if (!clientPageIds[c.client_profile] && (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post')) {
-      errors.push(`${label}: "${c.client_profile}" has no Facebook Page ID set yet — add one in the client list before exporting.`);
+    const needsPage = (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post');
+    if (!c.client_profile) {
+      if (needsPage) errors.push(`${label}: Pick a client — Meta requires knowing which Facebook Page runs this campaign.`);
+    } else if (needsPage && !resolvePageId(c, clients)) {
+      const client = clients.find((cl) => cl.name === c.client_profile);
+      errors.push(!client?.facebookPages?.length
+        ? `${label}: "${c.client_profile}" has no Facebook Pages added yet — paste its page list in the client's Facebook Pages manager before exporting.`
+        : `${label}: Pick which of "${c.client_profile}"'s Facebook Pages this campaign runs from.`);
     }
     if (!c.campaign_name) errors.push(`${label}: Campaign Name is required.`);
     if (!c.adset_name) errors.push(`${label}: Ad Set Name is required.`);

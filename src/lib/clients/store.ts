@@ -12,16 +12,24 @@ import { persist } from 'zustand/middleware';
 // here just makes it selectable, with a sensible generic/free-text fallback
 // in both tools for clients with no specific config.
 
+export interface FbPageEntry {
+  id: string;
+  /** A human label, e.g. "Shimano-Tribal (FR - French)" — a client can run
+   *  dozens of these (one per brand line × market), so the name is what a
+   *  person actually picks from, not the numeric ID. */
+  name: string;
+  pageId: string;
+}
+
 export interface ClientEntry {
   id: string;
   name: string;
   // Meta bulk upload requires a "Link Object ID" (o:<Page ID>) on every
-  // Facebook ad so it knows which Page is running it. Each client can run
-  // from its own Page (Shimano's own Page is distinct from any other
-  // client's), so this lives here rather than as a single global setting —
-  // set once per client, resolved automatically for every campaign under
-  // that client at export time (see fbBuilder.ts).
-  facebookPageId?: string;
+  // Facebook ad so it knows which Page is running it. A client can run from
+  // many Pages — Shimano alone has ~30, one per brand line and market — so
+  // each campaign later picks exactly which of these it belongs to (see
+  // FbCampaign.facebook_page_ref), resolved automatically at export time.
+  facebookPages?: FbPageEntry[];
 }
 
 function uid(): string {
@@ -33,7 +41,10 @@ interface ClientsState {
   addClient: (name: string) => ClientEntry | null;
   removeClient: (id: string) => void;
   renameClient: (id: string, name: string) => void;
-  setClientFacebookPageId: (id: string, facebookPageId: string) => void;
+  /** Replaces a client's whole Facebook Pages list — the bulk-paste importer
+   *  computes the merged list (existing + newly parsed rows, deduped by
+   *  pageId) and calls this once, rather than one add-call per row. */
+  setClientFacebookPages: (id: string, pages: FbPageEntry[]) => void;
 }
 
 export const useClientsStore = create<ClientsState>()(
@@ -63,8 +74,8 @@ export const useClientsStore = create<ClientsState>()(
         clients: s.clients.map((c) => (c.id === id ? { ...c, name: name.trim() || c.name } : c)),
       })),
 
-      setClientFacebookPageId: (id, facebookPageId) => set((s) => ({
-        clients: s.clients.map((c) => (c.id === id ? { ...c, facebookPageId: facebookPageId.trim() } : c)),
+      setClientFacebookPages: (id, pages) => set((s) => ({
+        clients: s.clients.map((c) => (c.id === id ? { ...c, facebookPages: pages } : c)),
       })),
     }),
     { name: 'nmq-clients-store' },

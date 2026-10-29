@@ -22,10 +22,6 @@ export function Sidebar() {
   const platform = useBuilderStore((s) => s.platform);
   const setPlatform = useBuilderStore((s) => s.setPlatform);
   const clients = useClientsStore((s) => s.clients);
-  const clientPageIds = useMemo(
-    () => Object.fromEntries(clients.filter((c) => c.facebookPageId).map((c) => [c.name, c.facebookPageId!])),
-    [clients],
-  );
   const googleCampaigns = useBuilderStore((s) => s.googleCampaigns);
   const fbCampaigns = useBuilderStore((s) => s.fbCampaigns);
   const pmaxCampaigns = useBuilderStore((s) => s.pmaxCampaigns);
@@ -141,8 +137,8 @@ export function Sidebar() {
   }, [campaigns]);
 
   const errors = useMemo(
-    () => (platform === 'google' ? validateCampaigns(googleCampaigns) : validateFbCampaigns(fbCampaigns, clientPageIds)),
-    [platform, googleCampaigns, fbCampaigns, clientPageIds],
+    () => (platform === 'google' ? validateCampaigns(googleCampaigns) : validateFbCampaigns(fbCampaigns, clients)),
+    [platform, googleCampaigns, fbCampaigns, clients],
   );
 
   // Facebook ad sets sharing a campaign name are ONE campaign with ONE
@@ -190,7 +186,7 @@ export function Sidebar() {
       const res = await fetch('/api/campaign/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, campaigns: subset, exportType, clientPageIds }),
+        body: JSON.stringify({ platform, campaigns: subset, exportType, clients }),
       });
       if (!res.ok) {
         window.alert(`Export failed:\n\n${await res.text()}`);

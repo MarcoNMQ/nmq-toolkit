@@ -11,7 +11,7 @@ const STORAGE_KEY = 'nmq-campaign-builder-store';
  *  normalizing for (see `migrate` below). There was no version/migrate at
  *  all before this — any pre-existing persisted state has an implicit
  *  version of 0. */
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -29,6 +29,10 @@ function uid(): string {
  * Page ID automatically at export). Existing Facebook campaigns have no
  * such key — backfilled to '' so every read of it is a string, matching
  * the type, instead of `undefined` reaching a controlled <select>.
+ * v2 → v3: a client can run dozens of Facebook Pages (one per brand line ×
+ * market), so a client alone doesn't resolve a Page — FbCampaign gained
+ * `facebook_page_ref`, picking exactly which of that client's Pages this
+ * campaign uses. Same backfill reasoning as client_profile above.
  * Exported (not inlined in the persist config) so it's directly
  * unit-testable without spinning up the whole store/localStorage.
  */
@@ -38,7 +42,11 @@ export function migrateBuilderState(persistedState: unknown): Pick<BuilderState,
   return {
     platform: (state.platform as BuilderState['platform']) ?? 'google',
     googleCampaigns: Array.isArray(state.googleCampaigns) ? (state.googleCampaigns as GoogleCampaign[]) : [],
-    fbCampaigns: fbCampaigns.map((c) => ({ ...c, client_profile: c.client_profile ?? '' })),
+    fbCampaigns: fbCampaigns.map((c) => ({
+      ...c,
+      client_profile: c.client_profile ?? '',
+      facebook_page_ref: c.facebook_page_ref ?? '',
+    })),
     pmaxCampaigns: Array.isArray(state.pmaxCampaigns) ? (state.pmaxCampaigns as PmaxCampaign[]) : [],
     selected: (state.selected as SelectedView) ?? { type: 'welcome' },
     expanded: (state.expanded as Record<string, boolean>) ?? {},
@@ -154,6 +162,7 @@ export function newFbCampaign(): FbCampaign {
   return {
     id: uid(),
     client_profile: '',
+    facebook_page_ref: '',
     campaign_name: '',
     campaign_status: 'PAUSED',
     campaign_objective: '',

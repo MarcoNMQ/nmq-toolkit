@@ -3,11 +3,13 @@ import ExcelJS from 'exceljs';
 import { buildFbExcel, buildFbAdsOnlyExcel } from '../fbBuilder';
 import { FB_HEADERS } from '../fbConstants';
 import type { FbCampaign } from '../types';
+import type { ClientEntry } from '@/lib/clients/store';
 
 function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: 'c1',
     client_profile: 'Shimano',
+    facebook_page_ref: 'page1',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -45,6 +47,15 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   };
 }
 
+/** Shimano with one named Page ("page1") — mirrors the real shape, where a
+ *  client runs many Pages and a campaign picks exactly one by its ref. */
+function makeClients(): ClientEntry[] {
+  return [
+    { id: 'c1', name: 'Shimano', facebookPages: [{ id: 'page1', name: 'Shimano Fishing FR', pageId: '123456789012345' }] },
+    { id: 'c2', name: 'Lineage', facebookPages: [{ id: 'pageL', name: 'Lineage Main', pageId: '999999999999999' }] },
+  ];
+}
+
 async function readRows(buf: Buffer): Promise<Record<string, string>[]> {
   const wb = new ExcelJS.Workbook();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,25 +73,31 @@ async function readRows(buf: Buffer): Promise<Record<string, string>[]> {
 }
 
 describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
-  it("sets Link Object ID as o:<pageId> on a new-creative ad, resolved from the campaign's client", async () => {
-    const buf = await buildFbExcel([makeCard()], { Shimano: '123456789012345' });
+  it("sets Link Object ID as o:<pageId> on a new-creative ad, resolved from the campaign's client + chosen Page", async () => {
+    const buf = await buildFbExcel([makeCard()], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
   });
 
-  it('leaves Link Object ID blank when the client has no Page ID set', async () => {
-    const buf = await buildFbExcel([makeCard()], {});
+  it('leaves Link Object ID blank when the client has no Pages at all', async () => {
+    const buf = await buildFbExcel([makeCard()], [{ id: 'c1', name: 'Shimano' }]);
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
-  it("does not resolve a Page ID from an unrelated client's entry", async () => {
-    const buf = await buildFbExcel([makeCard()], { Lineage: '999999999999999' });
+  it('leaves Link Object ID blank when facebook_page_ref matches nothing in the client\'s Pages', async () => {
+    const buf = await buildFbExcel([makeCard({ facebook_page_ref: 'deleted-page' })], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
-  it('does not set Link Object ID on an existing-post ad, even when its client has a Page ID set', async () => {
+  it("does not resolve a Page from an unrelated client's roster", async () => {
+    const buf = await buildFbExcel([makeCard({ facebook_page_ref: 'pageL' })], makeClients());
+    const rows = await readRows(buf);
+    expect(rows[0]['Link Object ID']).toBe('');
+  });
+
+  it('does not set Link Object ID on an existing-post ad, even when its Page resolves fine', async () => {
     const base = makeCard();
     const card = {
       ...base,
@@ -88,13 +105,13 @@ describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
         ...base.ads[0], ad_type: 'existing_post' as const, story_id: 's:123',
       }],
     };
-    const buf = await buildFbExcel([card], { Shimano: '123456789012345' });
+    const buf = await buildFbExcel([card], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
   it('also populates Link Object ID in the ads-only export', async () => {
-    const buf = await buildFbAdsOnlyExcel([makeCard()], { Shimano: '123456789012345' });
+    const buf = await buildFbAdsOnlyExcel([makeCard()], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
   });
