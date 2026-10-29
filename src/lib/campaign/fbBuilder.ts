@@ -214,6 +214,7 @@ export function validateFbCampaigns(campaigns: FbCampaign[]): string[] {
       } else {
         if (!ad.link) errors.push(`${al}: Destination URL is required.`);
         if (!ad.image_hash && !ad.image_file_name) errors.push(`${al}: Provide either an Image Hash (existing asset) or an Image File Name.`);
+        if (ad.image_hash && ad.image_file_name) errors.push(`${al}: Provide only one of Image Hash or Image File Name, not both — Meta rejects rows with both set.`);
         if (!ad.body) errors.push(`${al}: Body (primary text) is required.`);
         if (ad.title && ad.title.length > 25) errors.push(`${al}: Title is ${ad.title.length} chars (max 25).`);
         if (ad.body && ad.body.length > 500) errors.push(`${al}: Body is ${ad.body.length} chars (max 500).`);

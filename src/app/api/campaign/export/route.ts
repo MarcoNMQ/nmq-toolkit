@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildCsv, buildKeywordsCsv, buildSitelinksCsv } from '@/lib/campaign/builder';
-import { buildFbExcel, buildFbAdsOnlyExcel } from '@/lib/campaign/fbBuilder';
-import { fbGroupingErrors } from '@/lib/campaign/fbGrouping';
+import { buildFbExcel, buildFbAdsOnlyExcel, validateFbCampaigns } from '@/lib/campaign/fbBuilder';
 import { buildSearchBundles } from '@/lib/campaign/google/searchBridge';
 import { validateSearchBundles } from '@/lib/campaign/google/searchValidation';
 import { buildSearchBulkUploadWorkbook } from '@/lib/campaign/google/searchSerializer';
@@ -115,11 +114,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (platform === 'facebook') {
-    // Conflicting campaign settings across same-named ad sets would make
-    // Meta reject the file or split the campaign — never hand that file out.
-    const groupingErrors = fbGroupingErrors(campaigns as FbCampaign[]);
-    if (groupingErrors.length > 0) {
-      return new NextResponse(groupingErrors.join('\n'), { status: 422 });
+    // validateFbCampaigns covers both field-level requirements (required
+    // fields, character limits, image-hash/file-name exclusivity) and
+    // cross-ad-set grouping conflicts. Previously only the grouping check
+    // ran here, so a campaign missing required fields entirely (blank
+    // destination URL, no image, no ad copy, missing objective/countries)
+    // could still be exported — the same class of silently-broken-export
+    // bug the Search audit fixed.
+    const fieldErrors = validateFbCampaigns(campaigns as FbCampaign[]);
+    if (fieldErrors.length > 0) {
+      return new NextResponse(fieldErrors.join('\n'), { status: 422 });
     }
     const isAdsOnly = exportType === 'fb_ads_only';
     const buffer = isAdsOnly

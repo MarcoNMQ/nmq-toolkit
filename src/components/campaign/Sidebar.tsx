@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
 import { validateCampaigns } from '@/lib/campaign/builder';
 import { validateFbCampaigns } from '@/lib/campaign/fbBuilder';
-import { fbGroupingErrors, groupFbCampaigns } from '@/lib/campaign/fbGrouping';
+import { groupFbCampaigns } from '@/lib/campaign/fbGrouping';
 import { FbSidebarTree } from '@/components/campaign/facebook/FbSidebarTree';
 import type { GoogleCampaign, FbCampaign } from '@/lib/campaign/types';
 
@@ -142,10 +142,12 @@ export function Sidebar() {
   // Facebook ad sets sharing a campaign name are ONE campaign with ONE
   // budget, so count and sum per campaign group, not per card.
   const fbGroups = useMemo(() => groupFbCampaigns(fbCampaigns), [fbCampaigns]);
-  const fbBlockingErrors = useMemo(
-    () => (platform === 'facebook' ? fbGroupingErrors(fbCampaigns) : []),
-    [platform, fbCampaigns],
-  );
+  // `errors` already includes grouping conflicts for Facebook (validateFbCampaigns
+  // calls fbGroupingErrors internally) plus every other required-field/limit
+  // check, so blocking on it here closes the gap where a campaign missing
+  // required fields (blank link, no image, no body, etc.) could still be
+  // downloaded even though the validation already flagged it.
+  const fbExportBlocked = platform === 'facebook' && errors.length > 0;
   const totalAds = campaigns.reduce((n, c) => n + c.ads.length, 0);
   const totalBudget = platform === 'facebook'
     ? fbGroups.reduce((n, g) => n + (Number(g.cards[0].budget) || 0), 0)
@@ -548,11 +550,11 @@ export function Sidebar() {
                   </label>
                 ))}
               </div>
-              {fbBlockingErrors.length > 0 && (
+              {fbExportBlocked && (
                 <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5">
-                  <p className="text-[11px] font-bold text-red-700">Export blocked: fix these so every ad set lands in the right campaign</p>
+                  <p className="text-[11px] font-bold text-red-700">Export blocked — fix these first</p>
                   <ul className="mt-1 max-h-28 list-disc overflow-y-auto pl-4">
-                    {fbBlockingErrors.map((e, i) => (
+                    {errors.map((e, i) => (
                       <li key={i} className="text-[11px] text-red-700">{e}</li>
                     ))}
                   </ul>
@@ -560,7 +562,7 @@ export function Sidebar() {
               )}
               <div className="mt-2 flex gap-2">
                 <button
-                  disabled={exporting || selectedExportMarkets.size === 0 || fbBlockingErrors.length > 0}
+                  disabled={exporting || selectedExportMarkets.size === 0 || fbExportBlocked}
                   onClick={handleExport}
                   className="flex-1 rounded-md bg-brand-500 py-1.5 text-xs font-bold text-white transition hover:bg-brand-600 disabled:opacity-40"
                 >
@@ -575,7 +577,7 @@ export function Sidebar() {
               </div>
               {platform === 'facebook' && (
                 <button
-                  disabled={exporting || selectedExportMarkets.size === 0 || fbBlockingErrors.length > 0}
+                  disabled={exporting || selectedExportMarkets.size === 0 || fbExportBlocked}
                   onClick={handleFbAdsOnly}
                   className="mt-1.5 w-full rounded-md border border-brand-500 py-1.5 text-xs font-bold text-brand-600 transition hover:bg-brand-50 disabled:opacity-40"
                 >
