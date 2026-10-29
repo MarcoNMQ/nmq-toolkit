@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { SHIMANO_FB_PAGES } from './shimanoPages';
 
 // Shared client roster used by BOTH Campaign Builder (client_profile picker)
 // and AI Insight Generator (Client tabs) — previously each tool hardcoded its
@@ -47,13 +48,36 @@ interface ClientsState {
   setClientFacebookPages: (id: string, pages: FbPageEntry[]) => void;
 }
 
+/** v0 → v1: Shimano's real Facebook Page list is now seeded by default (see
+ *  shimanoPages.ts) — but that only applies to the initial creator state in
+ *  useClientsStore below, which Zustand never reaches once a browser
+ *  already has persisted clients. Anyone who picked "Shimano" before this
+ *  existed has that client with no facebookPages at all, so back-fill it
+ *  here too. Never overwrites a Shimano entry that already has pages (from
+ *  the bulk-paste importer or a prior run of this same migration) — a
+ *  person's own edits always win. Exported (not inlined in the persist
+ *  config) so it's directly unit-testable. */
+export function migrateClientsState(persistedState: unknown): { clients?: ClientEntry[] } | undefined {
+  const state = persistedState as { clients?: ClientEntry[] } | undefined;
+  if (!state?.clients) return state;
+  return {
+    ...state,
+    clients: state.clients.map((c) => (
+      c.name === 'Shimano' && !c.facebookPages?.length ? { ...c, facebookPages: SHIMANO_FB_PAGES } : c
+    )),
+  };
+}
+
 export const useClientsStore = create<ClientsState>()(
   persist(
     (set, get) => ({
       // Seeded example rows, deletable — never the ONLY options, and never
-      // pre-selected as a default anywhere that reads this list.
+      // pre-selected as a default anywhere that reads this list. Shimano
+      // comes with its real Facebook Pages pre-loaded (see shimanoPages.ts)
+      // since it's a real, active client with ~30 Pages already known —
+      // not a placeholder to delete like the other two.
       clients: [
-        { id: 'shimano', name: 'Shimano' },
+        { id: 'shimano', name: 'Shimano', facebookPages: SHIMANO_FB_PAGES },
         { id: 'rituals', name: 'Rituals' },
         { id: 'lineage', name: 'Lineage' },
       ],
@@ -78,6 +102,10 @@ export const useClientsStore = create<ClientsState>()(
         clients: s.clients.map((c) => (c.id === id ? { ...c, facebookPages: pages } : c)),
       })),
     }),
-    { name: 'nmq-clients-store' },
+    {
+      name: 'nmq-clients-store',
+      version: 1,
+      migrate: migrateClientsState,
+    },
   ),
 );
