@@ -128,16 +128,52 @@ export function FbCampaignForm({ campaignId }: { campaignId: string }) {
         </Field>
       </div>
 
+      <Field
+        label="Budget level"
+        hint="Meta treats these as mutually exclusive — Campaign means one shared budget for every ad set; Ad Set means each ad set sets its own. Only the matching fields below are exported; the other side is left blank."
+      >
+        <div className="flex gap-1 rounded-xl border border-ink-200 bg-ink-50 p-1">
+          {(['Campaign', 'Ad Set'] as const).map((level) => (
+            <button
+              key={level}
+              type="button"
+              onClick={() => patch({ budget_level: level })}
+              className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
+                campaign.budget_level === level ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-800'
+              }`}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      </Field>
+
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Campaign budget type">
-          <Select value={campaign.budget_type} onChange={(e) => patch({ budget_type: e.target.value as 'Daily' | 'Lifetime' })}>
-            <option value="Daily">Daily</option>
-            <option value="Lifetime">Lifetime</option>
-          </Select>
-        </Field>
-        <Field label="Campaign budget (€)">
-          <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} />
-        </Field>
+        {campaign.budget_level === 'Ad Set' ? (
+          <>
+            <Field label="Ad set budget type">
+              <Select value={campaign.adset_budget_type} onChange={(e) => patch({ adset_budget_type: e.target.value as 'Daily' | 'Lifetime' })}>
+                <option value="Daily">Daily</option>
+                <option value="Lifetime">Lifetime</option>
+              </Select>
+            </Field>
+            <Field label="Ad set budget (€)">
+              <TextInput type="number" min={0} step="0.01" value={campaign.adset_budget} onChange={(e) => patch({ adset_budget: Number(e.target.value) })} />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="Campaign budget type">
+              <Select value={campaign.budget_type} onChange={(e) => patch({ budget_type: e.target.value as 'Daily' | 'Lifetime' })}>
+                <option value="Daily">Daily</option>
+                <option value="Lifetime">Lifetime</option>
+              </Select>
+            </Field>
+            <Field label="Campaign budget (€)">
+              <TextInput type="number" min={0} step="0.01" value={campaign.budget} onChange={(e) => patch({ budget: Number(e.target.value) })} />
+            </Field>
+          </>
+        )}
         <Field label="Start time">
           <TextInput type="date" value={campaign.campaign_start_time} onChange={(e) => patch({ campaign_start_time: e.target.value })} />
         </Field>

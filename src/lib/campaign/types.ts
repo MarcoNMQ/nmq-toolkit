@@ -171,6 +171,13 @@ export interface FbCampaign {
   tags: string;
   campaign_start_time: string;
   campaign_stop_time: string;
+  // Meta treats Campaign Budget Optimization (one shared budget) and Ad Set
+  // budget (each ad set has its own) as mutually exclusive — a campaign is
+  // one or the other, never both. This picks which; the export only ever
+  // writes the Daily/Lifetime Budget columns for the level actually chosen,
+  // leaving the other blank rather than writing both (which Meta would
+  // likely reject or resolve unpredictably).
+  budget_level: 'Campaign' | 'Ad Set';
   budget_type: 'Daily' | 'Lifetime';
   budget: number;
 

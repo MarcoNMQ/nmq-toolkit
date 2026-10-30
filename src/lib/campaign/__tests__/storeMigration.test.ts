@@ -27,7 +27,7 @@ describe('migrateBuilderState', () => {
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
     expect(migrated.fbCampaigns).toEqual([{
-      id: 'fb1', campaign_name: 'Test',
+      id: 'fb1', campaign_name: 'Test', budget_level: 'Campaign',
       ads: [{ id: 'ad1', ad_name: 'Ad 1', client_profile: '', facebook_page_ref: '' }],
     }]);
   });
@@ -40,7 +40,7 @@ describe('migrateBuilderState', () => {
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
     expect(migrated.fbCampaigns).toEqual([{
-      id: 'fb1', campaign_name: 'Test',
+      id: 'fb1', campaign_name: 'Test', budget_level: 'Campaign',
       ads: [
         { id: 'ad1', ad_name: 'Ad 1', client_profile: 'Shimano', facebook_page_ref: 'page1' },
         { id: 'ad2', ad_name: 'Ad 2', client_profile: 'Shimano', facebook_page_ref: 'page1' },
@@ -56,9 +56,23 @@ describe('migrateBuilderState', () => {
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
     expect(migrated.fbCampaigns).toEqual([{
-      id: 'fb1', campaign_name: 'Test',
+      id: 'fb1', campaign_name: 'Test', budget_level: 'Campaign',
       ads: [{ id: 'ad1', ad_name: 'Ad 1', client_profile: 'Lineage', facebook_page_ref: 'pageL' }],
     }]);
+  });
+
+  it('backfills budget_level to Campaign for pre-existing Facebook campaigns (they only ever had a campaign-level budget before this)', () => {
+    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', ads: [] }];
+    const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
+    const migrated = migrateBuilderState(legacy);
+    expect(migrated.fbCampaigns[0]).toMatchObject({ budget_level: 'Campaign' });
+  });
+
+  it('leaves an already-set budget_level untouched', () => {
+    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', budget_level: 'Ad Set', ads: [] }];
+    const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
+    const migrated = migrateBuilderState(legacy);
+    expect(migrated.fbCampaigns[0]).toMatchObject({ budget_level: 'Ad Set' });
   });
 
   it('handles completely empty/undefined persisted state without throwing', () => {

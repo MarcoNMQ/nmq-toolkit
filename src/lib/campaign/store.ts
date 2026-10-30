@@ -11,7 +11,7 @@ const STORAGE_KEY = 'nmq-campaign-builder-store';
  *  normalizing for (see `migrate` below). There was no version/migrate at
  *  all before this — any pre-existing persisted state has an implicit
  *  version of 0. */
-const STORE_VERSION = 4;
+const STORE_VERSION = 5;
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -42,6 +42,13 @@ function uid(): string {
  * blocked/overwrote exactly that case. Any value already set at the
  * campaign level becomes that campaign's ads' default (only where an ad
  * doesn't already have its own) rather than being lost.
+ * v4 → v5: FbCampaign gained `budget_level` ('Campaign' | 'Ad Set') — Meta
+ * treats Campaign Budget Optimization and per-ad-set budget as mutually
+ * exclusive, and the export always wrote the campaign-level budget columns
+ * unconditionally regardless of whether an ad set budget was also present.
+ * Existing campaigns only ever used the campaign-level budget (there was no
+ * UI to set an ad set budget before this), so they backfill to 'Campaign' —
+ * an export-behavior no-op for every campaign that existed before this.
  * Exported (not inlined in the persist config) so it's directly
  * unit-testable without spinning up the whole store/localStorage.
  */
@@ -55,6 +62,7 @@ export function migrateBuilderState(persistedState: unknown): Pick<BuilderState,
       const { client_profile, facebook_page_ref, ...rest } = c;
       return {
         ...rest,
+        budget_level: rest.budget_level ?? 'Campaign',
         ads: (rest.ads ?? []).map((ad) => ({
           ...ad,
           client_profile: ad.client_profile ?? client_profile ?? '',
@@ -186,6 +194,7 @@ export function newFbCampaign(): FbCampaign {
     tags: '',
     campaign_start_time: '',
     campaign_stop_time: '',
+    budget_level: 'Campaign',
     budget_type: 'Daily',
     budget: 0,
     adset_name: '',

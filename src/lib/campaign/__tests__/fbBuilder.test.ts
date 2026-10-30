@@ -16,7 +16,7 @@ function makeAd(overrides: Partial<FbAd> = {}): FbAd {
   };
 }
 
-function makeCard(adOverrides: Partial<FbAd> = {}): FbCampaign {
+function makeCard(adOverrides: Partial<FbAd> = {}, campaignOverrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: 'c1',
     campaign_name: 'My Campaign',
@@ -27,6 +27,7 @@ function makeCard(adOverrides: Partial<FbAd> = {}): FbCampaign {
     tags: '',
     campaign_start_time: '2026-11-01',
     campaign_stop_time: '2026-11-30',
+    budget_level: 'Campaign',
     budget_type: 'Daily',
     budget: 100,
     adset_name: 'My Ad Set',
@@ -47,6 +48,7 @@ function makeCard(adOverrides: Partial<FbAd> = {}): FbCampaign {
     billing_event: 'IMPRESSIONS',
     adset_bid_strategy: '',
     ads: [makeAd(adOverrides)],
+    ...campaignOverrides,
   };
 }
 
@@ -123,5 +125,35 @@ describe('buildFbExcel — Link Object ID (Facebook Page attribution, per ad)', 
     const buf = await buildFbAdsOnlyExcel([makeCard()], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
+  });
+});
+
+describe('buildFbExcel — budget level (Campaign vs Ad Set, mutually exclusive)', () => {
+  it('writes only the Campaign budget column when budget_level is Campaign, leaving Ad Set budget blank', async () => {
+    const card = makeCard({}, { budget_level: 'Campaign', budget_type: 'Daily', budget: 50, adset_budget_type: 'Lifetime', adset_budget: 999 });
+    const buf = await buildFbExcel([card]);
+    const rows = await readRows(buf);
+    expect(rows[0]['Campaign Daily Budget']).toBe('50.00');
+    expect(rows[0]['Campaign Lifetime Budget']).toBe('');
+    expect(rows[0]['Ad Set Daily Budget']).toBe('');
+    expect(rows[0]['Ad Set Lifetime Budget']).toBe('');
+  });
+
+  it('writes only the Ad Set budget column when budget_level is Ad Set, leaving Campaign budget blank', async () => {
+    const card = makeCard({}, { budget_level: 'Ad Set', budget_type: 'Daily', budget: 50, adset_budget_type: 'Lifetime', adset_budget: 999 });
+    const buf = await buildFbExcel([card]);
+    const rows = await readRows(buf);
+    expect(rows[0]['Campaign Daily Budget']).toBe('');
+    expect(rows[0]['Campaign Lifetime Budget']).toBe('');
+    expect(rows[0]['Ad Set Lifetime Budget']).toBe('999.00');
+    expect(rows[0]['Ad Set Daily Budget']).toBe('');
+  });
+
+  it('defaults to Campaign-level budget behavior when budget_level is missing (pre-migration safety net)', async () => {
+    const card = makeCard({}, { budget: 75 });
+    delete (card as Partial<FbCampaign>).budget_level;
+    const buf = await buildFbExcel([card]);
+    const rows = await readRows(buf);
+    expect(rows[0]['Campaign Daily Budget']).toBe('75.00');
   });
 });

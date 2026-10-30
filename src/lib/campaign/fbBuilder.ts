@@ -74,10 +74,15 @@ export async function buildFbExcel(campaigns: FbCampaign[], clients: ClientEntry
       row['Campaign Start Time'] = fmtFbDate(owner.campaign_start_time);
       row['Campaign Stop Time'] = fmtFbDate(owner.campaign_stop_time);
 
-      if (owner.budget_type === 'Daily') {
-        row['Campaign Daily Budget'] = Number(owner.budget ?? 0).toFixed(2);
-      } else {
-        row['Campaign Lifetime Budget'] = Number(owner.budget ?? 0).toFixed(2);
+      // Meta treats Campaign Budget Optimization and per-ad-set budget as
+      // mutually exclusive — only the columns for the chosen level get
+      // written, the other side stays blank rather than both being filled.
+      if ((owner.budget_level ?? 'Campaign') === 'Campaign') {
+        if (owner.budget_type === 'Daily') {
+          row['Campaign Daily Budget'] = Number(owner.budget ?? 0).toFixed(2);
+        } else {
+          row['Campaign Lifetime Budget'] = Number(owner.budget ?? 0).toFixed(2);
+        }
       }
 
       // Ad Set level
@@ -86,12 +91,11 @@ export async function buildFbExcel(campaigns: FbCampaign[], clients: ClientEntry
       row['Ad Set Time Start'] = fmtFbDate(camp.adset_start_time);
       row['Ad Set Time Stop'] = fmtFbDate(camp.adset_stop_time);
 
-      const adsetBud = camp.adset_budget ?? 0;
-      if (adsetBud) {
+      if (owner.budget_level === 'Ad Set') {
         if (camp.adset_budget_type === 'Daily') {
-          row['Ad Set Daily Budget'] = Number(adsetBud).toFixed(2);
+          row['Ad Set Daily Budget'] = Number(camp.adset_budget ?? 0).toFixed(2);
         } else {
-          row['Ad Set Lifetime Budget'] = Number(adsetBud).toFixed(2);
+          row['Ad Set Lifetime Budget'] = Number(camp.adset_budget ?? 0).toFixed(2);
         }
       }
 
@@ -227,6 +231,11 @@ export function validateFbCampaigns(campaigns: FbCampaign[], clients: ClientEntr
     if (!c.optimization_goal) errors.push(`${label}: Optimization Goal is required.`);
     if (!c.billing_event) errors.push(`${label}: Billing Event is required.`);
     if (!c.ads || c.ads.length === 0) errors.push(`${label}: Add at least one ad.`);
+    if ((c.budget_level ?? 'Campaign') === 'Campaign') {
+      if (!(c.budget > 0)) errors.push(`${label}: Campaign budget is required.`);
+    } else if (!(c.adset_budget > 0)) {
+      errors.push(`${label}: Ad set budget is required.`);
+    }
 
     (c.ads ?? []).forEach((ad, j) => {
       const al = `${label} › Ad ${j + 1} (${ad.ad_name || '—'})`;

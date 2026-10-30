@@ -25,6 +25,7 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
     tags: '',
     campaign_start_time: '2026-11-01',
     campaign_stop_time: '2026-11-30',
+    budget_level: 'Campaign',
     budget_type: 'Daily',
     budget: 100,
     adset_name: 'My Ad Set',
@@ -88,6 +89,33 @@ describe('validateFbCampaigns — required fields', () => {
   it('flags a campaign with zero ads', () => {
     const errors = validateFbCampaigns([makeCard({ ads: [] })], makeClients());
     expect(errors.some((e) => /Add at least one ad/.test(e))).toBe(true);
+  });
+});
+
+describe('validateFbCampaigns — budget level (Campaign vs Ad Set)', () => {
+  it('flags a zero/missing Campaign budget when budget_level is Campaign', () => {
+    const errors = validateFbCampaigns([makeCard({ budget_level: 'Campaign', budget: 0 })], makeClients());
+    expect(errors.some((e) => /Campaign budget is required/.test(e))).toBe(true);
+  });
+
+  it('does not require an ad set budget when budget_level is Campaign, even if adset_budget is 0', () => {
+    const errors = validateFbCampaigns([makeCard({ budget_level: 'Campaign', budget: 50, adset_budget: 0 })], makeClients());
+    expect(errors.some((e) => /Ad set budget is required/.test(e))).toBe(false);
+  });
+
+  it('flags a zero/missing ad set budget when budget_level is Ad Set', () => {
+    const errors = validateFbCampaigns([makeCard({ budget_level: 'Ad Set', adset_budget: 0 })], makeClients());
+    expect(errors.some((e) => /Ad set budget is required/.test(e))).toBe(true);
+  });
+
+  it('does not require a Campaign budget when budget_level is Ad Set, even if budget is 0', () => {
+    const errors = validateFbCampaigns([makeCard({ budget_level: 'Ad Set', budget: 0, adset_budget: 50 })], makeClients());
+    expect(errors.some((e) => /Campaign budget is required/.test(e))).toBe(false);
+  });
+
+  it('passes once the budget for the chosen level is set', () => {
+    const errors = validateFbCampaigns([makeCard({ budget_level: 'Ad Set', adset_budget: 50 })], makeClients());
+    expect(errors.some((e) => /budget is required/.test(e))).toBe(false);
   });
 });
 

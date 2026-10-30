@@ -22,6 +22,7 @@ export const FB_CAMPAIGN_LEVEL_FIELDS = [
   'tags',
   'campaign_start_time',
   'campaign_stop_time',
+  'budget_level',
   'budget_type',
   'budget',
 ] as const;
@@ -34,6 +35,7 @@ const FIELD_LABELS: Record<FbCampaignLevelField, string> = {
   buying_type: 'Buying type',
   campaign_bid_strategy: 'Campaign bid strategy',
   tags: 'Tags',
+  budget_level: 'Budget level (Campaign vs Ad Set)',
   campaign_start_time: 'Start time',
   campaign_stop_time: 'Stop time',
   budget_type: 'Campaign budget type',

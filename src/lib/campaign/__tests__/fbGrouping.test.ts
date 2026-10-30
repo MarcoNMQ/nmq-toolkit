@@ -13,6 +13,7 @@ function makeCard(overrides: Partial<FbCampaign>): FbCampaign {
     tags: '',
     campaign_start_time: '2026-11-01',
     campaign_stop_time: '2026-11-30',
+    budget_level: 'Campaign',
     budget_type: 'Daily',
     budget: 100,
     adset_name: 'My Ad Set',
@@ -72,6 +73,13 @@ describe('fbGroupingErrors — same ad set name across cards', () => {
     const errors = fbGroupingErrors([a, b]);
     expect(errors.length).toBe(1);
     expect(errors[0]).toMatch(/budget/i);
+  });
+
+  it('blocks export when ad sets of the same campaign disagree on budget level (Campaign vs Ad Set)', () => {
+    const a = makeCard({ adset_name: 'Ad Set A', budget_level: 'Campaign' });
+    const b = makeCard({ adset_name: 'Ad Set B', budget_level: 'Ad Set' });
+    const errors = fbGroupingErrors([a, b]);
+    expect(errors.some((e) => /Budget level/.test(e))).toBe(true);
   });
 
   it('still flags campaign-level conflicts the same as before (unaffected by this change)', () => {
