@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useBuilderStore } from '@/lib/campaign/store';
+import { useClientsStore } from '@/lib/clients/store';
+import { mergeFbPages, parseFbPagesPaste } from '@/lib/clients/parseFbPages';
 import { FB_CREATIVE_TYPES, FB_CTAS, FB_STATUSES } from '@/lib/campaign/fbConstants';
 import { CharCount, Field, Select, TextArea, TextInput } from '@/components/Field';
 import type { FbAd } from '@/lib/campaign/types';
@@ -62,15 +64,38 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
   const ad = campaign?.ads.find((a) => a.id === adId);
   const updateAd = useBuilderStore((s) => s.updateFbAd);
   const removeAd = useBuilderStore((s) => s.removeFbAd);
+  const clients = useClientsStore((s) => s.clients);
+  const addClient = useClientsStore((s) => s.addClient);
+  const removeClient = useClientsStore((s) => s.removeClient);
+  const setClientFacebookPages = useClientsStore((s) => s.setClientFacebookPages);
 
   const [urlError, setUrlError] = useState('');
+  const [pagesManagerOpen, setPagesManagerOpen] = useState(false);
+  const [pastedPages, setPastedPages] = useState('');
+  const [pasteFeedback, setPasteFeedback] = useState<string | null>(null);
 
   if (!campaign || !ad) return null;
 
   const postUrl = ad.post_url ?? '';
+  const selectedClient = clients.find((c) => c.name === ad.client_profile);
 
   function patch(p: Partial<FbAd>) {
     updateAd(campaignId, adId, p);
+  }
+
+  function importPastedPages() {
+    if (!selectedClient) return;
+    const { rows, invalidLines } = parseFbPagesPaste(pastedPages);
+    if (rows.length > 0) {
+      const merged = mergeFbPages(selectedClient.facebookPages ?? [], rows);
+      setClientFacebookPages(selectedClient.id, merged);
+    }
+    setPastedPages('');
+    setPasteFeedback(
+      invalidLines.length > 0
+        ? `Added/updated ${rows.length} page${rows.length === 1 ? '' : 's'}. Couldn't read ${invalidLines.length} line${invalidLines.length === 1 ? '' : 's'}: ${invalidLines.join(' | ')}`
+        : `Added/updated ${rows.length} page${rows.length === 1 ? '' : 's'}.`,
+    );
   }
 
   function handlePostUrl(url: string) {
@@ -109,6 +134,116 @@ export function FbAdForm({ campaignId, adId }: { campaignId: string; adId: strin
           </Select>
         </Field>
       </div>
+
+      <Field
+        label="Client"
+        hint="Resolves this ad's Facebook Page (Meta requires knowing which Page runs it). Per-ad, not per-campaign — other ads in this same campaign can use a different client/Page with no effect on this one."
+      >
+        <div className="flex gap-2">
+          <Select
+            value={ad.client_profile}
+            onChange={(e) => {
+              if (e.target.value === '__add__') {
+                const name = window.prompt('New client name:');
+                const entry = name ? addClient(name) : null;
+                if (entry) patch({ client_profile: entry.name, facebook_page_ref: '' });
+                return;
+              }
+              patch({ client_profile: e.target.value, facebook_page_ref: '' });
+            }}
+          >
+            <option value="">— None —</option>
+            {clients.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            <option value="__add__">+ Add new client…</option>
+          </Select>
+          {ad.client_profile && (
+            <button
+              type="button"
+              title={`Remove "${ad.client_profile}" from the client list`}
+              onClick={() => {
+                if (selectedClient && window.confirm(`Remove "${selectedClient.name}" from the client list?`)) {
+                  removeClient(selectedClient.id);
+                  patch({ client_profile: '', facebook_page_ref: '' });
+                }
+              }}
+              className="rounded-md border border-ink-200 px-2 text-xs text-ink-400 hover:border-red-300 hover:text-red-500"
+            >
+              🗑
+            </button>
+          )}
+        </div>
+      </Field>
+
+      {selectedClient && (
+        <Field label="Facebook Page">
+          <div className="flex gap-2">
+            <Select value={ad.facebook_page_ref} onChange={(e) => patch({ facebook_page_ref: e.target.value })}>
+              <option value="">— None —</option>
+              {(selectedClient.facebookPages ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            <button
+              type="button"
+              onClick={() => setPagesManagerOpen((v) => !v)}
+              className="whitespace-nowrap rounded-md border border-ink-200 px-2 text-xs font-semibold text-ink-500 hover:bg-ink-50"
+            >
+              {pagesManagerOpen ? 'Hide' : 'Manage'} {selectedClient.name}&rsquo;s Pages ({(selectedClient.facebookPages ?? []).length})
+            </button>
+          </div>
+
+          {pagesManagerOpen && (
+            <div className="mt-2 space-y-2 rounded-md border border-ink-200 bg-ink-50 p-3">
+              <p className="text-xs text-ink-500">
+                Paste a list of this client&rsquo;s Facebook Pages — one per line, as &ldquo;Page name&rdquo; then the numeric Page
+                ID (tab, comma, or space separated; pasting straight from a spreadsheet works). Re-pasting only adds new
+                pages or updates a name — it never removes one.
+              </p>
+              <textarea
+                value={pastedPages}
+                onChange={(e) => setPastedPages(e.target.value)}
+                placeholder={'Shimano Tribal Hungary\t100224755907718\nShimano-Fishing (FR - French)\t744008922322330'}
+                rows={4}
+                className="w-full rounded-md border border-ink-200 bg-white px-2 py-1.5 font-mono text-xs outline-none focus:border-brand-500"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={importPastedPages}
+                  disabled={!pastedPages.trim()}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-600 disabled:opacity-40"
+                >
+                  Add / update pages
+                </button>
+                {pasteFeedback && <span className="text-xs text-ink-500">{pasteFeedback}</span>}
+              </div>
+
+              {(selectedClient.facebookPages ?? []).length > 0 && (
+                <ul className="max-h-40 space-y-1 overflow-y-auto border-t border-ink-200 pt-2">
+                  {(selectedClient.facebookPages ?? []).map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-ink-700" title={p.name}>{p.name}</span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="font-mono text-ink-400">{p.pageId}</span>
+                        <button
+                          type="button"
+                          title={`Remove "${p.name}"`}
+                          onClick={() => {
+                            const next = (selectedClient.facebookPages ?? []).filter((x) => x.id !== p.id);
+                            setClientFacebookPages(selectedClient.id, next);
+                            if (ad.facebook_page_ref === p.id) patch({ facebook_page_ref: '' });
+                          }}
+                          className="text-ink-400 hover:text-red-500"
+                        >
+                          🗑
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </Field>
+      )}
 
       {/* Ad type toggle */}
       <div className="rounded-xl border border-ink-200 p-1 flex gap-1 bg-ink-50">

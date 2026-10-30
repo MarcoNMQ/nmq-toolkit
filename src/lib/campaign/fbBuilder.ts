@@ -3,7 +3,7 @@
 import ExcelJS from 'exceljs';
 import { FB_HEADERS, FB_COUNTRY_ISO } from './fbConstants';
 import { groupFbCampaigns, fbGroupingErrors } from './fbGrouping';
-import type { FbCampaign } from './types';
+import type { FbAd, FbCampaign } from './types';
 import type { ClientEntry } from '@/lib/clients/store';
 
 /** Convert a YYYY-MM-DD string to MM/DD/YY HH:MM for Facebook. */
@@ -35,14 +35,15 @@ function toIso(codes: string[]): string {
   return codes.map((c) => FB_COUNTRY_ISO[c] ?? c).join(',');
 }
 
-/** Resolves client_profile + facebook_page_ref to an actual numeric Facebook
- *  Page ID, by looking the campaign's client up in the shared client roster
- *  and then that client's chosen Page by its stable ref id. A client can run
- *  dozens of Pages (one per brand line × market), so both the client AND the
- *  specific Page it picked are needed — the client alone isn't enough. */
-function resolvePageId(owner: FbCampaign, clients: ClientEntry[]): string {
-  const client = clients.find((c) => c.name === owner.client_profile);
-  return client?.facebookPages?.find((p) => p.id === owner.facebook_page_ref)?.pageId ?? '';
+/** Resolves an ad's client_profile + facebook_page_ref to an actual numeric
+ *  Facebook Page ID, by looking its client up in the shared client roster
+ *  and then that client's chosen Page by its stable ref id. This is
+ *  per-AD, not per-campaign — in Meta's real model, which Page runs an ad
+ *  is an ad-level choice, so two ads in the same campaign can resolve to
+ *  two different Pages with zero effect on each other. */
+function resolvePageId(ad: FbAd, clients: ClientEntry[]): string {
+  const client = clients.find((c) => c.name === ad.client_profile);
+  return client?.facebookPages?.find((p) => p.id === ad.facebook_page_ref)?.pageId ?? '';
 }
 
 /** Build the Facebook Ads Manager .xlsx file, one row per ad. */
@@ -52,17 +53,16 @@ export async function buildFbExcel(campaigns: FbCampaign[], clients: ClientEntry
   ws.addRow(FB_HEADERS);
 
   for (const { card: camp, owner, name } of exportOrder(campaigns)) {
-    const pageId = resolvePageId(owner, clients);
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
 
       // Campaign level — always from the campaign's owner card
       row['Campaign Name'] = name;
-      // Every ad needs a Link Object ID so Meta knows which Page is
-      // running it — a story/existing-post ad already runs from a real
-      // post on the Page, so it doesn't need this.
-      if (pageId && ad.ad_type !== 'existing_post') {
+      // Resolved per ad, not per campaign — each ad can run from its own
+      // Facebook Page independently of every other ad in the campaign.
+      const pageId = resolvePageId(ad, clients);
+      if (pageId) {
         row['Link Object ID'] = `o:${pageId}`;
       }
       row['Campaign Status'] = owner.campaign_status || 'PAUSED';
@@ -169,8 +169,7 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clients: Clie
     'Product 3 - Link', 'Product 3 - Name', 'Product 3 - Description', 'Product 3 - Image Hash',
   ]);
 
-  for (const { card: camp, owner, name } of exportOrder(campaigns)) {
-    const pageId = resolvePageId(owner, clients);
+  for (const { card: camp, name } of exportOrder(campaigns)) {
     for (const ad of camp.ads ?? []) {
       const row: Record<string, string> = {};
       for (const h of FB_HEADERS) row[h] = '';
@@ -180,7 +179,8 @@ export async function buildFbAdsOnlyExcel(campaigns: FbCampaign[], clients: Clie
       row['Link'] = ad.link ?? '';
       row['Ad Status'] = ad.ad_status || 'PAUSED';
       row['Ad Name'] = ad.ad_name ?? '';
-      if (pageId && ad.ad_type !== 'existing_post') {
+      const pageId = resolvePageId(ad, clients);
+      if (pageId) {
         row['Link Object ID'] = `o:${pageId}`;
       }
 
@@ -220,15 +220,6 @@ export function validateFbCampaigns(campaigns: FbCampaign[], clients: ClientEntr
 
   campaigns.forEach((c, i) => {
     const label = `Campaign ${i + 1} (${c.campaign_name || '—'})`;
-    const needsPage = (c.ads ?? []).some((ad) => ad.ad_type !== 'existing_post');
-    if (!c.client_profile) {
-      if (needsPage) errors.push(`${label}: Pick a client — Meta requires knowing which Facebook Page runs this campaign.`);
-    } else if (needsPage && !resolvePageId(c, clients)) {
-      const client = clients.find((cl) => cl.name === c.client_profile);
-      errors.push(!client?.facebookPages?.length
-        ? `${label}: "${c.client_profile}" has no Facebook Pages added yet — paste its page list in the client's Facebook Pages manager before exporting.`
-        : `${label}: Pick which of "${c.client_profile}"'s Facebook Pages this campaign runs from.`);
-    }
     if (!c.campaign_name) errors.push(`${label}: Campaign Name is required.`);
     if (!c.adset_name) errors.push(`${label}: Ad Set Name is required.`);
     if (!c.campaign_objective) errors.push(`${label}: Campaign Objective is required.`);
@@ -239,6 +230,17 @@ export function validateFbCampaigns(campaigns: FbCampaign[], clients: ClientEntr
 
     (c.ads ?? []).forEach((ad, j) => {
       const al = `${label} › Ad ${j + 1} (${ad.ad_name || '—'})`;
+      // Every ad needs a Link Object ID so Meta knows which Page is running
+      // it — resolved per ad, independently of every other ad, so picking
+      // one ad's client/Page never affects any other ad.
+      if (!ad.client_profile) {
+        errors.push(`${al}: Pick a client — Meta requires knowing which Facebook Page runs this ad.`);
+      } else if (!resolvePageId(ad, clients)) {
+        const client = clients.find((cl) => cl.name === ad.client_profile);
+        errors.push(!client?.facebookPages?.length
+          ? `${al}: "${ad.client_profile}" has no Facebook Pages added yet — paste its page list in the client's Facebook Pages manager before exporting.`
+          : `${al}: Pick which of "${ad.client_profile}"'s Facebook Pages this ad runs from.`);
+      }
       if (!ad.ad_name) errors.push(`${al}: Ad Name is required.`);
       if (ad.ad_type === 'existing_post') {
         if (!ad.story_id) errors.push(`${al}: Story ID is required when promoting an existing post.`);

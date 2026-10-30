@@ -2,14 +2,23 @@ import { describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
 import { buildFbExcel, buildFbAdsOnlyExcel } from '../fbBuilder';
 import { FB_HEADERS } from '../fbConstants';
-import type { FbCampaign } from '../types';
+import type { FbAd, FbCampaign } from '../types';
 import type { ClientEntry } from '@/lib/clients/store';
 
-function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
+function makeAd(overrides: Partial<FbAd> = {}): FbAd {
+  return {
+    id: 'ad1', client_profile: 'Shimano', facebook_page_ref: 'page1',
+    ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
+    title: 'Headline', body: 'Body copy', link: 'https://example.com', link_description: '', display_link: '',
+    image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '',
+    creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE',
+    ...overrides,
+  };
+}
+
+function makeCard(adOverrides: Partial<FbAd> = {}): FbCampaign {
   return {
     id: 'c1',
-    client_profile: 'Shimano',
-    facebook_page_ref: 'page1',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -37,18 +46,12 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
     optimization_goal: 'LINK_CLICKS',
     billing_event: 'IMPRESSIONS',
     adset_bid_strategy: '',
-    ads: [{
-      id: 'ad1', ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
-      title: 'Headline', body: 'Body copy', link: 'https://example.com', link_description: '', display_link: '',
-      image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '',
-      creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE',
-    }],
-    ...overrides,
+    ads: [makeAd(adOverrides)],
   };
 }
 
 /** Shimano with one named Page ("page1") — mirrors the real shape, where a
- *  client runs many Pages and a campaign picks exactly one by its ref. */
+ *  client runs many Pages and an ad picks exactly one by its ref. */
 function makeClients(): ClientEntry[] {
   return [
     { id: 'c1', name: 'Shimano', facebookPages: [{ id: 'page1', name: 'Shimano Fishing FR', pageId: '123456789012345' }] },
@@ -72,8 +75,8 @@ async function readRows(buf: Buffer): Promise<Record<string, string>[]> {
   return rows;
 }
 
-describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
-  it("sets Link Object ID as o:<pageId> on a new-creative ad, resolved from the campaign's client + chosen Page", async () => {
+describe('buildFbExcel — Link Object ID (Facebook Page attribution, per ad)', () => {
+  it("sets Link Object ID as o:<pageId> on a new-creative ad, resolved from that ad's own client + chosen Page", async () => {
     const buf = await buildFbExcel([makeCard()], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
@@ -85,7 +88,7 @@ describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
-  it('leaves Link Object ID blank when facebook_page_ref matches nothing in the client\'s Pages', async () => {
+  it("leaves Link Object ID blank when facebook_page_ref matches nothing in the ad's client's Pages", async () => {
     const buf = await buildFbExcel([makeCard({ facebook_page_ref: 'deleted-page' })], makeClients());
     const rows = await readRows(buf);
     expect(rows[0]['Link Object ID']).toBe('');
@@ -97,17 +100,23 @@ describe('buildFbExcel — Link Object ID (Facebook Page attribution)', () => {
     expect(rows[0]['Link Object ID']).toBe('');
   });
 
-  it('does not set Link Object ID on an existing-post ad, even when its Page resolves fine', async () => {
-    const base = makeCard();
-    const card = {
-      ...base,
-      ads: [{
-        ...base.ads[0], ad_type: 'existing_post' as const, story_id: 's:123',
-      }],
-    };
+  it('sets Link Object ID on an existing-post ad too — promoted posts also need Page attribution', async () => {
+    const card = makeCard({ ad_type: 'existing_post', story_id: 's:123' });
     const buf = await buildFbExcel([card], makeClients());
     const rows = await readRows(buf);
-    expect(rows[0]['Link Object ID']).toBe('');
+    expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
+  });
+
+  it('resolves each ad independently — two ads in the same campaign can use two different Pages with no cross-effect', async () => {
+    const card = makeCard();
+    card.ads = [
+      makeAd({ id: 'ad1', client_profile: 'Shimano', facebook_page_ref: 'page1' }),
+      makeAd({ id: 'ad2', client_profile: 'Lineage', facebook_page_ref: 'pageL' }),
+    ];
+    const buf = await buildFbExcel([card], makeClients());
+    const rows = await readRows(buf);
+    expect(rows[0]['Link Object ID']).toBe('o:123456789012345');
+    expect(rows[1]['Link Object ID']).toBe('o:999999999999999');
   });
 
   it('also populates Link Object ID in the ads-only export', async () => {

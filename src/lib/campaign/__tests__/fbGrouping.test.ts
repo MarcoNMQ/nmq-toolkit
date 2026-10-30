@@ -5,8 +5,6 @@ import type { FbCampaign } from '../types';
 function makeCard(overrides: Partial<FbCampaign>): FbCampaign {
   return {
     id: Math.random().toString(36),
-    client_profile: '',
-    facebook_page_ref: '',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -35,7 +33,7 @@ function makeCard(overrides: Partial<FbCampaign>): FbCampaign {
     billing_event: 'IMPRESSIONS',
     adset_bid_strategy: '',
     ads: [{
-      id: 'ad1', ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
+      id: 'ad1', client_profile: '', facebook_page_ref: '', ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
       title: '', body: 'Body', link: 'https://example.com', link_description: '', display_link: '',
       image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '',
       creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE',
@@ -83,18 +81,11 @@ describe('fbGroupingErrors — same ad set name across cards', () => {
     expect(errors.some((e) => /Campaign objective/.test(e))).toBe(true);
   });
 
-  it('blocks export when ad sets of the same campaign disagree on client — different clients mean different Facebook Pages', () => {
-    const a = makeCard({ adset_name: 'Ad Set A', client_profile: 'Shimano' });
-    const b = makeCard({ adset_name: 'Ad Set B', client_profile: 'Lineage' });
+  it('does NOT block when ads across the campaign use different clients/Pages — that is an ad-level choice in Meta\'s real model, never conflict-checked', () => {
+    const a = makeCard({ adset_name: 'Ad Set A', ads: [{ id: 'a1', client_profile: 'Shimano', facebook_page_ref: 'page-fr', ad_name: 'A', ad_status: 'PAUSED', ad_type: 'new_creative', title: '', body: 'Body', link: 'https://example.com', link_description: '', display_link: '', image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '', creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE' }] });
+    const b = makeCard({ adset_name: 'Ad Set B', ads: [{ id: 'b1', client_profile: 'Lineage', facebook_page_ref: 'page-de', ad_name: 'B', ad_status: 'PAUSED', ad_type: 'new_creative', title: '', body: 'Body', link: 'https://example.com', link_description: '', display_link: '', image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '', creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE' }] });
     const errors = fbGroupingErrors([a, b]);
-    expect(errors.some((e) => /Client/.test(e))).toBe(true);
-  });
-
-  it('blocks export when ad sets of the same campaign agree on client but disagree on which Facebook Page', () => {
-    const a = makeCard({ adset_name: 'Ad Set A', client_profile: 'Shimano', facebook_page_ref: 'page-fr' });
-    const b = makeCard({ adset_name: 'Ad Set B', client_profile: 'Shimano', facebook_page_ref: 'page-de' });
-    const errors = fbGroupingErrors([a, b]);
-    expect(errors.some((e) => /Facebook Page/.test(e))).toBe(true);
+    expect(errors).toEqual([]);
   });
 
   it('treats two different ad set names in the same campaign as fine when nothing else conflicts', () => {

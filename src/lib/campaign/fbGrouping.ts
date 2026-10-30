@@ -8,10 +8,13 @@
 
 import type { FbCampaign } from './types';
 
-/** Fields that live on the Meta campaign itself, shared by all its ad sets. */
+/** Fields that live on the Meta campaign itself, shared by all its ad sets.
+ *  Deliberately does NOT include client_profile/facebook_page_ref — which
+ *  Facebook Page an ad runs from is an ad-level choice in Meta's real model,
+ *  not a campaign-level one (a single campaign can legitimately combine ads
+ *  attributed to different brand-line Pages), so those live on FbAd and are
+ *  never conflict-checked here. */
 export const FB_CAMPAIGN_LEVEL_FIELDS = [
-  'client_profile',
-  'facebook_page_ref',
   'campaign_status',
   'campaign_objective',
   'buying_type',
@@ -26,8 +29,6 @@ export const FB_CAMPAIGN_LEVEL_FIELDS = [
 export type FbCampaignLevelField = (typeof FB_CAMPAIGN_LEVEL_FIELDS)[number];
 
 const FIELD_LABELS: Record<FbCampaignLevelField, string> = {
-  client_profile: 'Client',
-  facebook_page_ref: 'Facebook Page',
   campaign_status: 'Campaign status',
   campaign_objective: 'Campaign objective',
   buying_type: 'Buying type',

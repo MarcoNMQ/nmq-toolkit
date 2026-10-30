@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { validateFbCampaigns } from '../fbBuilder';
-import type { FbCampaign } from '../types';
+import type { FbAd, FbCampaign } from '../types';
 import type { ClientEntry } from '@/lib/clients/store';
+
+function makeAd(overrides: Partial<FbAd> = {}): FbAd {
+  return {
+    id: 'ad1', client_profile: 'Shimano', facebook_page_ref: 'page1',
+    ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
+    title: 'Headline', body: 'Body copy', link: 'https://example.com', link_description: '', display_link: '',
+    image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '',
+    creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE',
+    ...overrides,
+  };
+}
 
 function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
   return {
     id: Math.random().toString(36),
-    client_profile: 'Shimano',
-    facebook_page_ref: 'page1',
     campaign_name: 'My Campaign',
     campaign_status: 'PAUSED',
     campaign_objective: 'OUTCOME_TRAFFIC',
@@ -35,18 +44,13 @@ function makeCard(overrides: Partial<FbCampaign> = {}): FbCampaign {
     optimization_goal: 'LINK_CLICKS',
     billing_event: 'IMPRESSIONS',
     adset_bid_strategy: '',
-    ads: [{
-      id: 'ad1', ad_name: 'Ad 1', ad_status: 'PAUSED', ad_type: 'new_creative',
-      title: 'Headline', body: 'Body copy', link: 'https://example.com', link_description: '', display_link: '',
-      image_hash: 'abc:123', image_file_name: '', story_id: '', video_id: '', post_url: '',
-      creative_type: 'Video Page Post Ad', url_tags: '', cta: 'LEARN_MORE',
-    }],
+    ads: [makeAd()],
     ...overrides,
   };
 }
 
 /** A client roster where Shimano has one Page ("page1" → a real Page ID) —
- *  mirrors the real shape, where a client can run many Pages and a campaign
+ *  mirrors the real shape, where a client can run many Pages and an ad
  *  picks exactly one by its ref. */
 function makeClients(): ClientEntry[] {
   return [
@@ -56,7 +60,7 @@ function makeClients(): ClientEntry[] {
 }
 
 describe('validateFbCampaigns — required fields', () => {
-  it('passes a fully filled-in campaign with no errors, given its Page resolves to a real Page ID', () => {
+  it('passes a fully filled-in campaign with no errors, given its ad\'s Page resolves to a real Page ID', () => {
     expect(validateFbCampaigns([makeCard()], makeClients())).toEqual([]);
   });
 
@@ -88,9 +92,8 @@ describe('validateFbCampaigns — required fields', () => {
 });
 
 describe('validateFbCampaigns — per-ad checks', () => {
-  function withAd(overrides: Partial<FbCampaign['ads'][number]>): FbCampaign {
-    const base = makeCard();
-    return { ...base, ads: [{ ...base.ads[0], ...overrides }] };
+  function withAd(overrides: Partial<FbAd>): FbCampaign {
+    return makeCard({ ads: [makeAd(overrides)] });
   }
 
   it('flags a blank ad name', () => {
@@ -143,24 +146,24 @@ describe('validateFbCampaigns — per-ad checks', () => {
   });
 });
 
-describe('validateFbCampaigns — client/Facebook Page resolution (Link Object ID)', () => {
-  it('blocks export when no client is picked at all', () => {
-    const errors = validateFbCampaigns([makeCard({ client_profile: '', facebook_page_ref: '' })]);
+describe('validateFbCampaigns — per-ad client/Facebook Page resolution (Link Object ID)', () => {
+  it('blocks export when no client is picked for an ad', () => {
+    const errors = validateFbCampaigns([makeCard({ ads: [makeAd({ client_profile: '', facebook_page_ref: '' })] })]);
     expect(errors.some((e) => /Pick a client/.test(e))).toBe(true);
   });
 
-  it('blocks export when a client is picked but has no Pages added yet', () => {
+  it('blocks export when an ad\'s client is picked but has no Pages added yet', () => {
     const errors = validateFbCampaigns([makeCard()], [{ id: 'c1', name: 'Shimano' }]);
     expect(errors.some((e) => /"Shimano" has no Facebook Pages added yet/.test(e))).toBe(true);
   });
 
-  it('blocks export when a client has Pages but none is picked for this campaign', () => {
-    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: '' })], makeClients());
+  it('blocks export when the client has Pages but none is picked for this ad', () => {
+    const errors = validateFbCampaigns([makeCard({ ads: [makeAd({ facebook_page_ref: '' })] })], makeClients());
     expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 
   it('blocks export when the picked facebook_page_ref no longer matches any of the client\'s Pages', () => {
-    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: 'deleted-page' })], makeClients());
+    const errors = validateFbCampaigns([makeCard({ ads: [makeAd({ facebook_page_ref: 'deleted-page' })] })], makeClients());
     expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 
@@ -169,41 +172,43 @@ describe('validateFbCampaigns — client/Facebook Page resolution (Link Object I
     expect(errors.some((e) => /Facebook Page/.test(e))).toBe(false);
   });
 
-  it("only resolves a Page from the matching client — another client's Page ref does not count", () => {
-    const errors = validateFbCampaigns([makeCard({ facebook_page_ref: 'pageL' })], makeClients());
+  it("only resolves a Page from the ad's own matching client — another client's Page ref does not count", () => {
+    const errors = validateFbCampaigns([makeCard({ ads: [makeAd({ facebook_page_ref: 'pageL' })] })], makeClients());
     expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
   });
 
-  it('does not require a Page when every ad promotes an existing post, even with no client/Page set', () => {
-    const base = makeCard({ client_profile: '', facebook_page_ref: '' });
-    const card = {
-      ...base,
-      ads: [{
-        ...base.ads[0], ad_type: 'existing_post' as const, story_id: 's:123',
-        link: '', body: '', image_hash: '', image_file_name: '', title: '',
-      }],
-    };
-    const errors = validateFbCampaigns([card]);
-    expect(errors.some((e) => /Facebook Page|Pick a client/.test(e))).toBe(false);
+  it('requires a Page even when the ad promotes an existing post — promoted posts also need Page attribution', () => {
+    const errors = validateFbCampaigns([makeCard({ ads: [makeAd({
+      client_profile: '', facebook_page_ref: '', ad_type: 'existing_post', story_id: 's:123',
+      link: '', body: '', image_hash: '', image_file_name: '', title: '',
+    })] })]);
+    expect(errors.some((e) => /Pick a client/.test(e))).toBe(true);
   });
 
-  it('still requires a Page if at least one ad in the set is a new creative, even if others are existing-post', () => {
-    const base = makeCard({ facebook_page_ref: '' });
-    const existingPostAd = {
-      ...base.ads[0], id: 'ad2', ad_name: 'Ad 2', ad_type: 'existing_post' as const, story_id: 's:123',
-      link: '', body: 'x', image_hash: '', image_file_name: '', title: '',
-    };
-    const card = { ...base, ads: [base.ads[0], existingPostAd] };
-    const errors = validateFbCampaigns([card], makeClients());
-    expect(errors.some((e) => /Pick which of "Shimano"'s Facebook Pages/.test(e))).toBe(true);
+  it('resolves each ad independently — one ad missing its Page never affects a sibling ad that has one set correctly', () => {
+    const errors = validateFbCampaigns([makeCard({
+      ads: [
+        makeAd({ id: 'ad1', client_profile: 'Shimano', facebook_page_ref: 'page1' }),
+        makeAd({ id: 'ad2', ad_name: 'Ad 2', client_profile: '', facebook_page_ref: '' }),
+      ],
+    })], makeClients());
+    expect(errors.some((e) => /Ad 1/.test(e) && /client|Facebook Page/i.test(e))).toBe(false);
+    expect(errors.some((e) => /Ad 2/.test(e) && /Pick a client/.test(e))).toBe(true);
   });
 });
 
 describe('validateFbCampaigns — includes grouping conflicts', () => {
   it('surfaces a grouping conflict (shared ad set name, disagreeing countries) alongside field errors', () => {
     const a = makeCard({ adset_name: 'Shared', countries: ['DE'] });
-    const b = makeCard({ adset_name: 'Shared', countries: ['FR'], ads: [{ ...a.ads[0], id: 'ad2', ad_name: 'Ad 2' }] });
+    const b = makeCard({ adset_name: 'Shared', countries: ['FR'], ads: [makeAd({ id: 'ad2', ad_name: 'Ad 2' })] });
     const errors = validateFbCampaigns([a, b], makeClients());
     expect(errors.some((e) => /Countries/.test(e) && /Shared/.test(e))).toBe(true);
+  });
+
+  it('does not treat ads using different clients/Pages as a grouping conflict, even when they share a campaign', () => {
+    const a = makeCard({ adset_name: 'Ad Set A', ads: [makeAd({ client_profile: 'Shimano', facebook_page_ref: 'page1' })] });
+    const b = makeCard({ adset_name: 'Ad Set B', ads: [makeAd({ id: 'ad2', ad_name: 'Ad 2', client_profile: 'Lineage', facebook_page_ref: 'pageL' })] });
+    const errors = validateFbCampaigns([a, b], makeClients());
+    expect(errors).toEqual([]);
   });
 });

@@ -22,25 +22,43 @@ describe('migrateBuilderState', () => {
     expect(migrated.googleCampaigns).toEqual(googleCampaigns);
   });
 
-  it('preserves existing Facebook campaign data, backfilling client_profile and facebook_page_ref for pre-existing data', () => {
-    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test' }];
+  it('preserves existing Facebook campaign data, backfilling blank client_profile/facebook_page_ref on ads with no campaign-level value to inherit', () => {
+    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', ads: [{ id: 'ad1', ad_name: 'Ad 1' }] }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
-    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: '', facebook_page_ref: '' }]);
+    expect(migrated.fbCampaigns).toEqual([{
+      id: 'fb1', campaign_name: 'Test',
+      ads: [{ id: 'ad1', ad_name: 'Ad 1', client_profile: '', facebook_page_ref: '' }],
+    }]);
   });
 
-  it('backfills only facebook_page_ref when client_profile was already set from an earlier migration pass', () => {
-    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano' }];
+  it('moves a campaign-level client_profile/facebook_page_ref (from the v2/v3 design) down onto every ad that has no value of its own, then drops it from the campaign', () => {
+    const fbCampaigns = [{
+      id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: 'page1',
+      ads: [{ id: 'ad1', ad_name: 'Ad 1' }, { id: 'ad2', ad_name: 'Ad 2' }],
+    }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
-    expect(migrated.fbCampaigns).toEqual([{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: '' }]);
+    expect(migrated.fbCampaigns).toEqual([{
+      id: 'fb1', campaign_name: 'Test',
+      ads: [
+        { id: 'ad1', ad_name: 'Ad 1', client_profile: 'Shimano', facebook_page_ref: 'page1' },
+        { id: 'ad2', ad_name: 'Ad 2', client_profile: 'Shimano', facebook_page_ref: 'page1' },
+      ],
+    }]);
   });
 
-  it('leaves already-set client_profile and facebook_page_ref untouched', () => {
-    const fbCampaigns = [{ id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: 'page1' }];
+  it("never overwrites an ad that already has its own client_profile/facebook_page_ref with the campaign's old value", () => {
+    const fbCampaigns = [{
+      id: 'fb1', campaign_name: 'Test', client_profile: 'Shimano', facebook_page_ref: 'page1',
+      ads: [{ id: 'ad1', ad_name: 'Ad 1', client_profile: 'Lineage', facebook_page_ref: 'pageL' }],
+    }];
     const legacy = { platform: 'facebook', googleCampaigns: [], fbCampaigns, selected: { type: 'welcome' }, expanded: {} };
     const migrated = migrateBuilderState(legacy);
-    expect(migrated.fbCampaigns).toEqual(fbCampaigns);
+    expect(migrated.fbCampaigns).toEqual([{
+      id: 'fb1', campaign_name: 'Test',
+      ads: [{ id: 'ad1', ad_name: 'Ad 1', client_profile: 'Lineage', facebook_page_ref: 'pageL' }],
+    }]);
   });
 
   it('handles completely empty/undefined persisted state without throwing', () => {

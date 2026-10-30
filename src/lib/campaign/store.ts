@@ -11,7 +11,7 @@ const STORAGE_KEY = 'nmq-campaign-builder-store';
  *  normalizing for (see `migrate` below). There was no version/migrate at
  *  all before this — any pre-existing persisted state has an implicit
  *  version of 0. */
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -33,20 +33,35 @@ function uid(): string {
  * market), so a client alone doesn't resolve a Page — FbCampaign gained
  * `facebook_page_ref`, picking exactly which of that client's Pages this
  * campaign uses. Same backfill reasoning as client_profile above.
+ * v3 → v4: client_profile/facebook_page_ref moved from FbCampaign down to
+ * FbAd — in Meta's real model, which Facebook Page runs an ad is an
+ * AD-level choice, not a campaign-level one (confirmed by real use: a
+ * single campaign legitimately combines ads attributed to different
+ * brand-line Pages, e.g. one ad promoting a Tribal post and another a
+ * Fishing post). Having them on FbCampaign forced every ad to agree and
+ * blocked/overwrote exactly that case. Any value already set at the
+ * campaign level becomes that campaign's ads' default (only where an ad
+ * doesn't already have its own) rather than being lost.
  * Exported (not inlined in the persist config) so it's directly
  * unit-testable without spinning up the whole store/localStorage.
  */
 export function migrateBuilderState(persistedState: unknown): Pick<BuilderState, 'platform' | 'googleCampaigns' | 'fbCampaigns' | 'pmaxCampaigns' | 'selected' | 'expanded'> {
   const state = (persistedState ?? {}) as Record<string, unknown>;
-  const fbCampaigns = Array.isArray(state.fbCampaigns) ? (state.fbCampaigns as FbCampaign[]) : [];
+  const fbCampaigns = Array.isArray(state.fbCampaigns) ? (state.fbCampaigns as (FbCampaign & { client_profile?: string; facebook_page_ref?: string })[]) : [];
   return {
     platform: (state.platform as BuilderState['platform']) ?? 'google',
     googleCampaigns: Array.isArray(state.googleCampaigns) ? (state.googleCampaigns as GoogleCampaign[]) : [],
-    fbCampaigns: fbCampaigns.map((c) => ({
-      ...c,
-      client_profile: c.client_profile ?? '',
-      facebook_page_ref: c.facebook_page_ref ?? '',
-    })),
+    fbCampaigns: fbCampaigns.map((c) => {
+      const { client_profile, facebook_page_ref, ...rest } = c;
+      return {
+        ...rest,
+        ads: (rest.ads ?? []).map((ad) => ({
+          ...ad,
+          client_profile: ad.client_profile ?? client_profile ?? '',
+          facebook_page_ref: ad.facebook_page_ref ?? facebook_page_ref ?? '',
+        })),
+      };
+    }),
     pmaxCampaigns: Array.isArray(state.pmaxCampaigns) ? (state.pmaxCampaigns as PmaxCampaign[]) : [],
     selected: (state.selected as SelectedView) ?? { type: 'welcome' },
     expanded: (state.expanded as Record<string, boolean>) ?? {},
@@ -139,6 +154,8 @@ export function newGoogleNegativeKeyword(): GoogleNegativeKeyword {
 export function newFbAd(): FbAd {
   return {
     id: uid(),
+    client_profile: '',
+    facebook_page_ref: '',
     ad_name: '',
     ad_status: 'PAUSED',
     ad_type: 'new_creative',
@@ -161,8 +178,6 @@ export function newFbAd(): FbAd {
 export function newFbCampaign(): FbCampaign {
   return {
     id: uid(),
-    client_profile: '',
-    facebook_page_ref: '',
     campaign_name: '',
     campaign_status: 'PAUSED',
     campaign_objective: '',

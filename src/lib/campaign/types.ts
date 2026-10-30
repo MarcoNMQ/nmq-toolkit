@@ -131,6 +131,18 @@ export interface GoogleCampaign {
 
 export interface FbAd {
   id: string;
+  // Which client this ad belongs to — matches a name in useClientsStore
+  // (src/lib/clients/store.ts). Per-AD, not per-campaign: in Meta's real
+  // model, which Facebook Page runs an ad is an ad-level choice, not a
+  // campaign-level one — a single campaign can legitimately combine ads
+  // attributed to different brand-line/market Pages (e.g. one ad promoting
+  // a Tribal post, another a Fishing post), and picking one ad's account
+  // must never affect any other ad's setup.
+  client_profile: string;
+  // Which of that client's Facebook Pages this ad runs from — matches a
+  // ClientEntry.facebookPages[].id. Resolved automatically into the
+  // exported Link Object ID at export time (see fbBuilder.ts).
+  facebook_page_ref: string;
   ad_name: string;
   ad_status: string;
   ad_type: 'new_creative' | 'existing_post';
@@ -151,16 +163,6 @@ export interface FbAd {
 
 export interface FbCampaign {
   id: string;
-  // Which client this campaign belongs to — matches a name in useClientsStore
-  // (src/lib/clients/store.ts), the same shared client roster GoogleCampaign
-  // uses.
-  client_profile: string;
-  // Which of that client's Facebook Pages this campaign runs from — matches
-  // a ClientEntry.facebookPages[].id. A client can run dozens of Pages (one
-  // per brand line × market — Shimano alone has ~30), so picking the client
-  // alone isn't enough to resolve a Link Object ID; this picks the exact
-  // Page. Resolved automatically at export time (see fbBuilder.ts).
-  facebook_page_ref: string;
   campaign_name: string;
   campaign_status: string;
   campaign_objective: string;
